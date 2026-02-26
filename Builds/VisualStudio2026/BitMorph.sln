@@ -1,0 +1,46 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio Version 18
+
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BitMorph - Standalone Plugin", "BitMorph_StandalonePlugin.vcxproj", "{30446E79-C3F1-4441-190E-A1E97D4CBF85}"
+	ProjectSection(ProjectDependencies) = postProject
+		{7A678D7C-5374-BF4C-55CC-118F06A6F1B9} = {7A678D7C-5374-BF4C-55CC-118F06A6F1B9}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BitMorph - VST3", "BitMorph_VST3.vcxproj", "{1FACF5C7-80E0-7E1D-7A40-4B5DFF7C7CBA}"
+	ProjectSection(ProjectDependencies) = postProject
+		{7A678D7C-5374-BF4C-55CC-118F06A6F1B9} = {7A678D7C-5374-BF4C-55CC-118F06A6F1B9}
+		{889323CE-3EA7-905D-4237-1D37BC621482} = {889323CE-3EA7-905D-4237-1D37BC621482}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BitMorph - Shared Code", "BitMorph_SharedCode.vcxproj", "{7A678D7C-5374-BF4C-55CC-118F06A6F1B9}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BitMorph - VST3 Manifest Helper", "BitMorph_VST3ManifestHelper.vcxproj", "{889323CE-3EA7-905D-4237-1D37BC621482}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1FACF5C7-80E0-7E1D-7A40-4B5DFF7C7CBA}.Debug|x64.ActiveCfg = Debug|x64
+		{1FACF5C7-80E0-7E1D-7A40-4B5DFF7C7CBA}.Debug|x64.Build.0 = Debug|x64
+		{1FACF5C7-80E0-7E1D-7A40-4B5DFF7C7CBA}.Release|x64.ActiveCfg = Release|x64
+		{1FACF5C7-80E0-7E1D-7A40-4B5DFF7C7CBA}.Release|x64.Build.0 = Release|x64
+		{30446E79-C3F1-4441-190E-A1E97D4CBF85}.Debug|x64.ActiveCfg = Debug|x64
+		{30446E79-C3F1-4441-190E-A1E97D4CBF85}.Debug|x64.Build.0 = Debug|x64
+		{30446E79-C3F1-4441-190E-A1E97D4CBF85}.Release|x64.ActiveCfg = Release|x64
+		{30446E79-C3F1-4441-190E-A1E97D4CBF85}.Release|x64.Build.0 = Release|x64
+		{7A678D7C-5374-BF4C-55CC-118F06A6F1B9}.Debug|x64.ActiveCfg = Debug|x64
+		{7A678D7C-5374-BF4C-55CC-118F06A6F1B9}.Debug|x64.Build.0 = Debug|x64
+		{7A678D7C-5374-BF4C-55CC-118F06A6F1B9}.Release|x64.ActiveCfg = Release|x64
+		{7A678D7C-5374-BF4C-55CC-118F06A6F1B9}.Release|x64.Build.0 = Release|x64
+		{889323CE-3EA7-905D-4237-1D37BC621482}.Debug|x64.ActiveCfg = Debug|x64
+		{889323CE-3EA7-905D-4237-1D37BC621482}.Debug|x64.Build.0 = Debug|x64
+		{889323CE-3EA7-905D-4237-1D37BC621482}.Release|x64.ActiveCfg = Release|x64
+		{889323CE-3EA7-905D-4237-1D37BC621482}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
