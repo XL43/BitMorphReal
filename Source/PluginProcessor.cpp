@@ -246,10 +246,17 @@ void BitMorphAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     const int numSamples = buffer.getNumSamples();
     const int numChannels = buffer.getNumChannels();
 
+    bool isPlaying = false;
     if (auto* ph = getPlayHead())
+    {
         if (auto pos = ph->getPosition())
+        {
             if (auto bpm = pos->getBpm())
                 currentBPM = *bpm;
+            isPlaying = pos->getIsPlaying();
+
+        }
+    }
 
     snapshotParameters();
 
@@ -270,8 +277,8 @@ void BitMorphAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
     for (int i = 0; i < numSamples; ++i)
     {
-        float lfoOut = lfo.tick();
-        float stepSeqOut = stepSeq.tick();
+        float lfoOut = isPlaying ? lfo.tick() : 0.0f;
+        float stepSeqOut = isPlaying ? stepSeq.tick() : 0.0f;
 
         float modBitDepth = params.bitDepth;
         float modResampleFreq = params.resampleFreq;
