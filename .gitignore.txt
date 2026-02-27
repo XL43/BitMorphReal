@@ -1,0 +1,19 @@
+@'
+Thumbs.db
+Desktop.ini
+.vs/
+*.user
+*.suo
+Release/
+Debug/
+x64/
+Win32/
+Builds/
+JuceLibraryCode/
+.vscode/
+build/
+*.vst3
+*.dll
+*.obj
+*.log
+'@ | Set-Content .gitignore -Encoding UTF8
