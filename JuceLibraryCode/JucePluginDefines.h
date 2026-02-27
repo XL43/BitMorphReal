@@ -155,7 +155,7 @@
  #define JucePlugin_ARAFactoryID           "com.evrshade.BitMorph.factory"
 #endif
 #ifndef  JucePlugin_ARADocumentArchiveID
- #define JucePlugin_ARADocumentArchiveID   "com.evrshade.BitMorph.aradocumentarchive.1.0.0"
+ #define JucePlugin_ARADocumentArchiveID   "com.evrshade.BitMorph.aradocumentarchive.0.1.0"
 #endif
 #ifndef  JucePlugin_ARACompatibleArchiveIDs
  #define JucePlugin_ARACompatibleArchiveIDs  ""

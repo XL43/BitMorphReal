@@ -3666,6 +3666,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\Source\BitCrusherEngine.h">
+      <Filter>BitMorph\Source</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\Source\PluginProcessor.h">
       <Filter>BitMorph\Source</Filter>
     </ClInclude>

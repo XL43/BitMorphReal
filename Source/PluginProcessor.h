@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include "BitCrusherEngine.h"
 
 class BitMorphAudioProcessor : public juce::AudioProcessor
 {
@@ -29,11 +30,61 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    // The APVTS is public so the editor can access it later
     juce::AudioProcessorValueTreeState apvts;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
+    // Two instances for stereo
+    BitMorphProcessor processorL;
+    BitMorphProcessor processorR;
+
+    LFO           lfo;
+    StepSequencer stepSeq;
+
+    // Plain struct to hold parameter values snapshotted each block
+    struct CachedParams
+    {
+        float preampGain = 1.0f;
+        float bitDepth = 8.0f;
+        bool  bitDepthEnabled = true;
+        float dithering = 0.0f;
+        bool  dcShift = false;
+        float resampleFreq = 44100.0f;
+        bool  resampleEnabled = true;
+        bool  approxEnabled = false;
+        float approxDeviation = 0.0f;
+        bool  imagesEnabled = false;
+        float imagesShift = 0.0f;
+        int   filterType = 0;
+        bool  filterPre = false;
+        float filterCutoff = 2000.0f;
+        float filterResonance = 0.0f;
+        bool  waveCrushEnabled = false;
+        float waveCrushAmount = 0.0f;
+        int   waveCrushMode = 0;
+        bool  ringModEnabled = false;
+        float ringModFreq = 440.0f;
+        float ringModMix = 1.0f;
+        float lfoRate = 1.0f;
+        float lfoDepth = 0.0f;
+        int   lfoWaveform = 0;
+        int   lfoTarget = 0;
+        bool  stepSeqEnabled = false;
+        float stepSeqRate = 1.0f;
+        float stepSeqDepth = 0.5f;
+        int   stepSeqTarget = 1;
+        float fxMix = 1.0f;
+        float outputVolume = 1.0f;
+    };
+
+    CachedParams params;
+    double currentBPM = 120.0;
+
+    void snapshotParameters();
+    void applyModulations(float lfoOut, float stepSeqOut,
+        float& bitDepth, float& resampleFreq,
+        float& waveCrushAmt, float& ringModFreq);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BitMorphAudioProcessor)
 };

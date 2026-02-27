@@ -6,6 +6,8 @@
               pluginVST3Category="Distortion" version="0.1.0">
   <MAINGROUP id="iNWgkO" name="BitMorph">
     <GROUP id="{9FA26F8D-7DEF-702E-9EA8-C37FC5F504DD}" name="Source">
+      <FILE id="eD6nyg" name="BitCrusherEngine.h" compile="0" resource="0"
+            file="Source/BitCrusherEngine.h"/>
       <FILE id="F5rL4Y" name="PluginProcessor.cpp" compile="1" resource="0"
             file="Source/PluginProcessor.cpp"/>
       <FILE id="krmATZ" name="PluginProcessor.h" compile="0" resource="0"
