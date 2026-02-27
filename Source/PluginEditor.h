@@ -1,33 +1,19 @@
-/*
-  ==============================================================================
-
-    This file contains the basic framework code for a JUCE plugin editor.
-
-  ==============================================================================
-*/
-
 #pragma once
-
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 
-//==============================================================================
-/**
-*/
-class BitMorphAudioProcessorEditor  : public juce::AudioProcessorEditor
+class BitMorphAudioProcessorEditor : public juce::AudioProcessorEditor
 {
 public:
-    BitMorphAudioProcessorEditor (BitMorphAudioProcessor&);
+    BitMorphAudioProcessorEditor(BitMorphAudioProcessor& p);
     ~BitMorphAudioProcessorEditor() override;
 
-    //==============================================================================
-    void paint (juce::Graphics&) override;
+    void paint(juce::Graphics&) override;
     void resized() override;
 
 private:
-    // This reference is provided as a quick way for your editor to
-    // access the processor object that created it.
     BitMorphAudioProcessor& audioProcessor;
+    juce::GenericAudioProcessorEditor genericEditor;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BitMorphAudioProcessorEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BitMorphAudioProcessorEditor)
 };
