@@ -32,17 +32,17 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
 
+
+    int getStepSequencerCurrentStep() const { return stepSeq.getCurrentStep(); }
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-    // Two instances for stereo
     BitMorphProcessor processorL;
     BitMorphProcessor processorR;
-
     LFO           lfo;
     StepSequencer stepSeq;
 
-    // Plain struct to hold parameter values snapshotted each block
     struct CachedParams
     {
         float preampGain = 1.0f;

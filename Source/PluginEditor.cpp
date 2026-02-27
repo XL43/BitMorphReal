@@ -1,6 +1,5 @@
 #include "PluginEditor.h"
 
-// ── Colours ───────────────────────────────────────────────────────────────────
 static const juce::Colour BG_DARK(0xff0d0d1a);
 static const juce::Colour BG_PANEL(0xff141428);
 static const juce::Colour BG_HEADER(0xff1a1a35);
@@ -10,7 +9,6 @@ static const juce::Colour TEXT_MUTED(0xff888899);
 static const juce::Colour KNOB_BODY(0xff252538);
 static const juce::Colour BORDER_CLR(0xff2a2a45);
 
-// ── BitMorphLookAndFeel ───────────────────────────────────────────────────────
 BitMorphLookAndFeel::BitMorphLookAndFeel()
 {
     setColour(juce::Slider::textBoxTextColourId, TEXT_LIGHT);
@@ -38,38 +36,32 @@ void BitMorphLookAndFeel::drawRotarySlider(juce::Graphics& g,
     float centreY = y + height * 0.5f;
     float angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
 
-    // Outer rim
     g.setColour(BORDER_CLR);
     g.fillEllipse(centreX - radius - 3, centreY - radius - 3,
         (radius + 3) * 2.0f, (radius + 3) * 2.0f);
 
-    // Knob body
     g.setColour(KNOB_BODY);
     g.fillEllipse(centreX - radius, centreY - radius,
         radius * 2.0f, radius * 2.0f);
 
-    // Track arc background
     juce::Path trackArc;
     trackArc.addCentredArc(centreX, centreY, radius + 5, radius + 5,
         0.0f, rotaryStartAngle, rotaryEndAngle, true);
     g.setColour(juce::Colour(0xff1e1e32));
     g.strokePath(trackArc, juce::PathStrokeType(3.5f));
 
-    // Filled arc (accent)
     juce::Path filledArc;
     filledArc.addCentredArc(centreX, centreY, radius + 5, radius + 5,
         0.0f, rotaryStartAngle, angle, true);
     g.setColour(ACCENT);
     g.strokePath(filledArc, juce::PathStrokeType(3.5f));
 
-    // Pointer line
     float pointerLength = radius * 0.55f;
     float px = centreX + pointerLength * std::sin(angle);
     float py = centreY - pointerLength * std::cos(angle);
     g.setColour(ACCENT);
     g.drawLine(centreX, centreY, px, py, 2.0f);
 
-    // Centre dot
     g.setColour(juce::Colour(0xff333350));
     g.fillEllipse(centreX - 3.0f, centreY - 3.0f, 6.0f, 6.0f);
 }
@@ -106,7 +98,6 @@ void BitMorphLookAndFeel::drawToggleButton(juce::Graphics& g,
         juce::Justification::centredLeft);
 }
 
-// ── SectionPanel ──────────────────────────────────────────────────────────────
 SectionPanel::SectionPanel(const juce::String& title) : sectionTitle(title) {}
 
 void SectionPanel::paint(juce::Graphics& g)
@@ -132,7 +123,6 @@ void SectionPanel::paint(juce::Graphics& g)
         juce::Justification::centredLeft);
 }
 
-// ── Editor helpers ────────────────────────────────────────────────────────────
 void BitMorphAudioProcessorEditor::setupKnob(KnobSet& k, const juce::String& labelText)
 {
     k.knob.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 64, 16);
@@ -167,7 +157,6 @@ void BitMorphAudioProcessorEditor::setupCombo(juce::ComboBox& combo,
     addAndMakeVisible(combo);
 }
 
-// ── Constructor ───────────────────────────────────────────────────────────────
 BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcessor& p)
     : AudioProcessorEditor(&p), audioProcessor(p)
 {
@@ -176,7 +165,6 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
 
     auto& apvts = audioProcessor.apvts;
 
-    // Section panels
     addAndMakeVisible(quantizerPanel);
     addAndMakeVisible(resamplerPanel);
     addAndMakeVisible(filterPanel);
@@ -186,7 +174,6 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     addAndMakeVisible(stepSeqPanel);
     addAndMakeVisible(masterPanel);
 
-    // ── Quantizer ─────────────────────────────────────────────────────────────
     setupKnob(bitDepthKnob, "Bit Depth");
     setupKnob(ditheringKnob, "Dithering");
     addAndMakeVisible(bitDepthOnBtn);
@@ -196,7 +183,6 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     bitDepthOnAtt = std::make_unique<ButtonAtt>(apvts, "bitDepthEnabled", bitDepthOnBtn);
     dcShiftAtt = std::make_unique<ButtonAtt>(apvts, "dcShift", dcShiftBtn);
 
-    // ── Resampler ─────────────────────────────────────────────────────────────
     setupKnob(resampleFreqKnob, "Frequency");
     setupKnob(approxDeviationKnob, "Deviation");
     setupKnob(imagesShiftKnob, "Img Shift");
@@ -210,7 +196,6 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     approxOnAtt = std::make_unique<ButtonAtt>(apvts, "approxEnabled", approxOnBtn);
     imagesOnAtt = std::make_unique<ButtonAtt>(apvts, "imagesEnabled", imagesOnBtn);
 
-    // ── Filter ────────────────────────────────────────────────────────────────
     setupKnob(filterCutoffKnob, "Cutoff");
     setupKnob(filterResonanceKnob, "Resonance");
     setupCombo(filterTypeCombo, filterTypeLabel, "Type",
@@ -221,7 +206,6 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     filterTypeAtt = std::make_unique<ComboAtt>(apvts, "filterType", filterTypeCombo);
     filterOrderAtt = std::make_unique<ComboAtt>(apvts, "filterOrder", filterOrderCombo);
 
-    // ── WaveCrusher ───────────────────────────────────────────────────────────
     setupKnob(waveCrushAmountKnob, "Amount");
     setupCombo(waveCrushModeCombo, waveCrushModeLabel, "Mode", { "Fold", "Wrap", "Tanh" });
     addAndMakeVisible(waveCrushOnBtn);
@@ -229,7 +213,6 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     waveCrushOnAtt = std::make_unique<ButtonAtt>(apvts, "waveCrushEnabled", waveCrushOnBtn);
     waveCrushModeAtt = std::make_unique<ComboAtt>(apvts, "waveCrushMode", waveCrushModeCombo);
 
-    // ── Ring Mod ──────────────────────────────────────────────────────────────
     setupKnob(ringModFreqKnob, "Frequency");
     setupKnob(ringModMixKnob, "Mix");
     addAndMakeVisible(ringModOnBtn);
@@ -237,7 +220,6 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     ringModMixAtt = std::make_unique<SliderAtt>(apvts, "ringModMix", ringModMixKnob.knob);
     ringModOnAtt = std::make_unique<ButtonAtt>(apvts, "ringModEnabled", ringModOnBtn);
 
-    // ── LFO ───────────────────────────────────────────────────────────────────
     setupKnob(lfoRateKnob, "Rate");
     setupKnob(lfoDepthKnob, "Depth");
     setupCombo(lfoWaveformCombo, lfoWaveformLabel, "Waveform",
@@ -249,7 +231,6 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     lfoWaveformAtt = std::make_unique<ComboAtt>(apvts, "lfoWaveform", lfoWaveformCombo);
     lfoTargetAtt = std::make_unique<ComboAtt>(apvts, "lfoTarget", lfoTargetCombo);
 
-    // ── Step Sequencer ────────────────────────────────────────────────────────
     setupKnob(stepSeqRateKnob, "Rate");
     setupKnob(stepSeqDepthKnob, "Depth");
     setupCombo(stepSeqTargetCombo, stepSeqTargetLabel, "Target",
@@ -260,13 +241,14 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     stepSeqOnAtt = std::make_unique<ButtonAtt>(apvts, "stepSeqEnabled", stepSeqOnBtn);
     stepSeqTargetAtt = std::make_unique<ComboAtt>(apvts, "stepSeqTarget", stepSeqTargetCombo);
 
-    // ── Master ────────────────────────────────────────────────────────────────
     setupKnob(preampKnob, "Preamp");
     setupKnob(fxMixKnob, "FX Mix");
     setupKnob(outputVolumeKnob, "Output");
     preampAtt = std::make_unique<SliderAtt>(apvts, "preampGain", preampKnob.knob);
     fxMixAtt = std::make_unique<SliderAtt>(apvts, "fxMix", fxMixKnob.knob);
     outputVolumeAtt = std::make_unique<SliderAtt>(apvts, "outputVolume", outputVolumeKnob.knob);
+
+
 }
 
 BitMorphAudioProcessorEditor::~BitMorphAudioProcessorEditor()
@@ -274,54 +256,42 @@ BitMorphAudioProcessorEditor::~BitMorphAudioProcessorEditor()
     setLookAndFeel(nullptr);
 }
 
-// ── Paint ─────────────────────────────────────────────────────────────────────
 void BitMorphAudioProcessorEditor::paint(juce::Graphics& g)
 {
     g.fillAll(BG_DARK);
 
-    // Header bar
     g.setColour(juce::Colour(0xff0a0a18));
     g.fillRect(0, 0, getWidth(), 40);
 
-    // Red accent line
     g.setColour(ACCENT);
     g.fillRect(0, 38, getWidth(), 2);
 
-    // Plugin name
     g.setColour(TEXT_LIGHT);
     g.setFont(juce::Font(20.0f, juce::Font::bold));
     g.drawText("BITMORPH", 16, 0, 200, 40, juce::Justification::centredLeft);
 
-    // Subtitle
     g.setColour(TEXT_MUTED);
     g.setFont(9.5f);
-    g.drawText("evrshade 2026",
-        0, 0, getWidth() - 16, 40,
+    g.drawText("evrshade 2026", 0, 0, getWidth() - 16, 40,
         juce::Justification::centredRight);
 }
 
-// ── Resized ───────────────────────────────────────────────────────────────────
 void BitMorphAudioProcessorEditor::resized()
 {
     const int W = getWidth();
     const int GAP = 4;
     const int HEADERH = 40;
     const int MASTERH = 130;
-    const int ROWH = (getHeight() - HEADERH - MASTERH - GAP * 3) / 2; // ~184
+    const int ROWH = (getHeight() - HEADERH - MASTERH - GAP * 3) / 2;
 
-    // ── Row 1 (3 sections × 400px) ────────────────────────────────────────────
     int r1y = HEADERH + GAP;
     int secW1 = W / 3;
 
-    auto qBounds = juce::Rectangle<int>(0, r1y, secW1, ROWH);
-    auto rBounds = juce::Rectangle<int>(secW1, r1y, secW1, ROWH);
-    auto fBounds = juce::Rectangle<int>(secW1 * 2, r1y, secW1, ROWH);
+    quantizerPanel.setBounds(juce::Rectangle<int>(0, r1y, secW1, ROWH).reduced(GAP));
+    resamplerPanel.setBounds(juce::Rectangle<int>(secW1, r1y, secW1, ROWH).reduced(GAP));
+    filterPanel.setBounds(juce::Rectangle<int>(secW1 * 2, r1y, secW1, ROWH).reduced(GAP));
 
-    quantizerPanel.setBounds(qBounds.reduced(GAP));
-    resamplerPanel.setBounds(rBounds.reduced(GAP));
-    filterPanel.setBounds(fBounds.reduced(GAP));
-
-    // ── Quantizer controls ────────────────────────────────────────────────────
+    // Quantizer
     {
         auto area = quantizerPanel.getBounds().reduced(6).withTrimmedTop(22);
         auto knobRow = area.removeFromTop(area.getHeight() - 54);
@@ -332,68 +302,55 @@ void BitMorphAudioProcessorEditor::resized()
         dcShiftBtn.setBounds(area.removeFromTop(22).reduced(4, 2));
     }
 
-    // ── Resampler controls ────────────────────────────────────────────────────
+    // Resampler
     {
         auto area = resamplerPanel.getBounds().reduced(6).withTrimmedTop(22);
         auto knobRow = area.removeFromTop(area.getHeight() - 74);
         auto freqArea = knobRow.removeFromLeft(knobRow.getWidth() / 3);
         auto devArea = knobRow.removeFromLeft(knobRow.getWidth() / 2);
-        auto shiftArea = knobRow;
         placeKnob(resampleFreqKnob, freqArea.reduced(6, 4));
         placeKnob(approxDeviationKnob, devArea.reduced(6, 4));
-        placeKnob(imagesShiftKnob, shiftArea.reduced(6, 4));
-
-        auto toggleArea = area;
-        resampleOnBtn.setBounds(toggleArea.removeFromTop(22).reduced(4, 2));
-        approxOnBtn.setBounds(toggleArea.removeFromTop(22).reduced(4, 2));
-        imagesOnBtn.setBounds(toggleArea.removeFromTop(22).reduced(4, 2));
+        placeKnob(imagesShiftKnob, knobRow.reduced(6, 4));
+        resampleOnBtn.setBounds(area.removeFromTop(22).reduced(4, 2));
+        approxOnBtn.setBounds(area.removeFromTop(22).reduced(4, 2));
+        imagesOnBtn.setBounds(area.removeFromTop(22).reduced(4, 2));
     }
 
-    // ── Filter controls ───────────────────────────────────────────────────────
+    // Filter
     {
         auto area = filterPanel.getBounds().reduced(6).withTrimmedTop(22);
         auto knobRow = area.removeFromTop(area.getHeight() - 64);
         auto left = knobRow.removeFromLeft(knobRow.getWidth() / 2);
         placeKnob(filterCutoffKnob, left.reduced(8, 4));
         placeKnob(filterResonanceKnob, knobRow.reduced(8, 4));
-
-        auto comboArea = area;
-        auto typeRow = comboArea.removeFromTop(30);
+        auto typeRow = area.removeFromTop(30);
         filterTypeLabel.setBounds(typeRow.removeFromLeft(40).reduced(0, 4));
         filterTypeCombo.setBounds(typeRow.reduced(2, 4));
-
-        auto orderRow = comboArea.removeFromTop(30);
+        auto orderRow = area.removeFromTop(30);
         filterOrderLabel.setBounds(orderRow.removeFromLeft(40).reduced(0, 4));
         filterOrderCombo.setBounds(orderRow.reduced(2, 4));
     }
 
-    // ── Row 2 (4 sections × 300px) ────────────────────────────────────────────
     int r2y = r1y + ROWH + GAP;
     int secW2 = W / 4;
 
-    auto wcBounds = juce::Rectangle<int>(0, r2y, secW2, ROWH);
-    auto rmBounds = juce::Rectangle<int>(secW2, r2y, secW2, ROWH);
-    auto loBounds = juce::Rectangle<int>(secW2 * 2, r2y, secW2, ROWH);
-    auto ssBounds = juce::Rectangle<int>(secW2 * 3, r2y, secW2, ROWH);
+    waveCrushPanel.setBounds(juce::Rectangle<int>(0, r2y, secW2, ROWH).reduced(GAP));
+    ringModPanel.setBounds(juce::Rectangle<int>(secW2, r2y, secW2, ROWH).reduced(GAP));
+    lfoPanel.setBounds(juce::Rectangle<int>(secW2 * 2, r2y, secW2, ROWH).reduced(GAP));
+    stepSeqPanel.setBounds(juce::Rectangle<int>(secW2 * 3, r2y, secW2, ROWH).reduced(GAP));
 
-    waveCrushPanel.setBounds(wcBounds.reduced(GAP));
-    ringModPanel.setBounds(rmBounds.reduced(GAP));
-    lfoPanel.setBounds(loBounds.reduced(GAP));
-    stepSeqPanel.setBounds(ssBounds.reduced(GAP));
-
-    // ── WaveCrusher controls ──────────────────────────────────────────────────
+    // WaveCrusher
     {
         auto area = waveCrushPanel.getBounds().reduced(6).withTrimmedTop(22);
         auto knobRow = area.removeFromTop(area.getHeight() - 50);
         placeKnob(waveCrushAmountKnob, knobRow.reduced(20, 4));
-
         waveCrushOnBtn.setBounds(area.removeFromTop(22).reduced(4, 2));
         auto modeRow = area.removeFromTop(28);
         waveCrushModeLabel.setBounds(modeRow.removeFromLeft(44).reduced(0, 4));
         waveCrushModeCombo.setBounds(modeRow.reduced(2, 4));
     }
 
-    // ── Ring Mod controls ─────────────────────────────────────────────────────
+    // Ring Mod
     {
         auto area = ringModPanel.getBounds().reduced(6).withTrimmedTop(22);
         auto knobRow = area.removeFromTop(area.getHeight() - 30);
@@ -403,45 +360,41 @@ void BitMorphAudioProcessorEditor::resized()
         ringModOnBtn.setBounds(area.removeFromTop(22).reduced(4, 2));
     }
 
-    // ── LFO controls ──────────────────────────────────────────────────────────
+    // LFO
     {
         auto area = lfoPanel.getBounds().reduced(6).withTrimmedTop(22);
         auto knobRow = area.removeFromTop(area.getHeight() - 60);
         auto left = knobRow.removeFromLeft(knobRow.getWidth() / 2);
         placeKnob(lfoRateKnob, left.reduced(6, 4));
         placeKnob(lfoDepthKnob, knobRow.reduced(6, 4));
-
         auto waveRow = area.removeFromTop(28);
         lfoWaveformLabel.setBounds(waveRow.removeFromLeft(50).reduced(0, 4));
         lfoWaveformCombo.setBounds(waveRow.reduced(2, 4));
-
         auto targRow = area.removeFromTop(28);
         lfoTargetLabel.setBounds(targRow.removeFromLeft(50).reduced(0, 4));
         lfoTargetCombo.setBounds(targRow.reduced(2, 4));
     }
 
-    // ── Step Sequencer controls ───────────────────────────────────────────────
+    // Step Sequencer
     {
         auto area = stepSeqPanel.getBounds().reduced(6).withTrimmedTop(22);
         auto knobRow = area.removeFromTop(area.getHeight() - 54);
         auto left = knobRow.removeFromLeft(knobRow.getWidth() / 2);
         placeKnob(stepSeqRateKnob, left.reduced(6, 4));
         placeKnob(stepSeqDepthKnob, knobRow.reduced(6, 4));
-
         stepSeqOnBtn.setBounds(area.removeFromTop(22).reduced(4, 2));
-
         auto targRow = area.removeFromTop(28);
         stepSeqTargetLabel.setBounds(targRow.removeFromLeft(44).reduced(0, 4));
         stepSeqTargetCombo.setBounds(targRow.reduced(2, 4));
     }
 
-    // ── Master strip ──────────────────────────────────────────────────────────
+    // Master
     int masy = r2y + ROWH + GAP;
     masterPanel.setBounds(GAP, masy, W - GAP * 2, MASTERH - GAP);
-
     {
         auto area = masterPanel.getBounds().reduced(6).withTrimmedTop(22);
-        int  kw = area.getWidth() / 3;
+        auto vuArea = area.removeFromRight(60);
+        int kw = area.getWidth() / 3;
         placeKnob(preampKnob, area.removeFromLeft(kw).reduced(16, 4));
         placeKnob(fxMixKnob, area.removeFromLeft(kw).reduced(16, 4));
         placeKnob(outputVolumeKnob, area.reduced(16, 4));

@@ -305,7 +305,10 @@ void BitMorphAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             params.approxEnabled, params.imagesEnabled,
             modBitDepth, modResampleFreq, fType,
             params.filterPre, params.fxMix, params.outputVolume);
-    }
+    } // end sample loop
+
+
+
 }
 
 void BitMorphAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
