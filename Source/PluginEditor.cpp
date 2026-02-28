@@ -1,14 +1,6 @@
 #include "PluginEditor.h"
 
-static const juce::Colour BG_DARK(0xff0d0d1a);
-static const juce::Colour BG_PANEL(0xff141428);
-static const juce::Colour BG_HEADER(0xff1a1a35);
-static const juce::Colour ACCENT(0xffe94560);
-static const juce::Colour TEXT_LIGHT(0xffddddee);
-static const juce::Colour TEXT_MUTED(0xffaabbcc);
-static const juce::Colour KNOB_BODY(0xff252538);
-static const juce::Colour BORDER_CLR(0xff2a2a45);
-
+// ── BitMorphLookAndFeel ───────────────────────────────────────────────────────
 BitMorphLookAndFeel::BitMorphLookAndFeel()
 {
     setColour(juce::Slider::textBoxTextColourId, TEXT_LIGHT);
@@ -98,31 +90,77 @@ void BitMorphLookAndFeel::drawToggleButton(juce::Graphics& g,
         juce::Justification::centredLeft);
 }
 
-SectionPanel::SectionPanel(const juce::String& title) : sectionTitle(title) {}
-
-void SectionPanel::paint(juce::Graphics& g)
+void BitMorphLookAndFeel::drawButtonText(juce::Graphics& g,
+    juce::TextButton& button,
+    bool highlighted, bool)
 {
-    auto b = getLocalBounds();
+    auto b = button.getLocalBounds().toFloat().reduced(2.0f);
+    auto name = button.getButtonText();
+    auto col = highlighted ? juce::Colours::white
+        : (button.findColour(juce::TextButton::textColourOffId));
 
-    g.setColour(BG_PANEL);
-    g.fillRoundedRectangle(b.toFloat(), 4.0f);
+    if (name == "DIE")
+    {
+        // Five-pip die
+        float s = juce::jmin(b.getWidth(), b.getHeight()) * 0.72f;
+        float bx = b.getCentreX() - s * 0.5f;
+        float by = b.getCentreY() - s * 0.5f;
+        float r = s * 0.11f;
+        float p = s * 0.22f;
 
-    g.setColour(BORDER_CLR);
-    g.drawRoundedRectangle(b.toFloat().reduced(0.5f), 4.0f, 1.0f);
+        g.setColour(col.withAlpha(0.15f));
+        g.fillRoundedRectangle(bx, by, s, s, s * 0.18f);
+        g.setColour(col.withAlpha(0.5f));
+        g.drawRoundedRectangle(bx, by, s, s, s * 0.18f, 1.0f);
 
-    auto header = b.removeFromTop(22);
-    g.setColour(BG_HEADER);
-    g.fillRect(header);
+        g.setColour(col);
+        auto pip = [&](float px, float py) { g.fillEllipse(bx + px - r, by + py - r, r * 2, r * 2); };
+        pip(p, p);
+        pip(s - p, p);
+        pip(s / 2, s / 2);
+        pip(p, s - p);
+        pip(s - p, s - p);
+        return;
+    }
 
-    g.setColour(ACCENT);
-    g.fillRect(header.getX(), header.getBottom() - 1, header.getWidth(), 1);
+    if (name == "SHUFFLE")
+    {
+        // Two crossed arrows
+        float cx = b.getCentreX(), cy = b.getCentreY();
+        float hw = b.getWidth() * 0.34f;
+        float hh = b.getHeight() * 0.26f;
+        float aw = 3.5f;
 
-    g.setColour(TEXT_LIGHT);
-    g.setFont(juce::Font(10.0f, juce::Font::bold));
-    g.drawText(sectionTitle, header.reduced(6, 0),
-        juce::Justification::centredLeft);
+        g.setColour(col);
+
+        auto arrow = [&](float x1, float y1, float x2, float y2)
+            {
+                g.drawLine(x1, y1, x2, y2, 1.5f);
+                float dx = x2 - x1, dy = y2 - y1;
+                float len = std::sqrt(dx * dx + dy * dy);
+                dx /= len; dy /= len;
+                juce::Path head;
+                head.addTriangle(x2, y2,
+                    x2 - dx * aw + dy * aw * 0.5f, y2 - dy * aw - dx * aw * 0.5f,
+                    x2 - dx * aw - dy * aw * 0.5f, y2 - dy * aw + dx * aw * 0.5f);
+                g.fillPath(head);
+            };
+
+        // Top-left to bottom-right
+        arrow(cx - hw, cy - hh, cx + hw, cy + hh);
+        // Bottom-left to top-right
+        arrow(cx - hw, cy + hh, cx + hw, cy - hh);
+        return;
+    }
+
+    // Default text rendering for all other buttons
+    g.setColour(col);
+    g.setFont(juce::Font(11.0f));
+    g.drawText(button.getButtonText(), button.getLocalBounds(),
+        juce::Justification::centred, false);
 }
 
+// ── Editor helpers ────────────────────────────────────────────────────────────
 void BitMorphAudioProcessorEditor::setupKnob(KnobSet& k, const juce::String& labelText)
 {
     k.knob.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 64, 16);
@@ -157,12 +195,13 @@ void BitMorphAudioProcessorEditor::setupCombo(juce::ComboBox& combo,
     addAndMakeVisible(combo);
 }
 
+// ── Constructor ───────────────────────────────────────────────────────────────
 BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcessor& p)
     : AudioProcessorEditor(&p), audioProcessor(p)
 {
     setLookAndFeel(&lookAndFeel);
 
-    // Preset bar
+    // Preset bar styling
     auto styleBtn = [](juce::TextButton& b, juce::Colour bg, juce::Colour fg)
         {
             b.setColour(juce::TextButton::buttonColourId, bg);
@@ -176,7 +215,6 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     styleBtn(presetRandBtn, juce::Colour(0xff252538), TEXT_LIGHT);
     styleBtn(presetRandParamBtn, juce::Colour(0xff252538), ACCENT);
     styleBtn(presetNameBtn, juce::Colour(0xff1a1a35), TEXT_LIGHT);
-    presetNameBtn.setButtonText("-- Init --");
 
     addAndMakeVisible(presetPrevBtn);
     addAndMakeVisible(presetNextBtn);
@@ -190,8 +228,7 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
         {
             if (allPresets.isEmpty()) return;
             currentPresetIndex = (currentPresetIndex <= 0)
-                ? allPresets.size() - 1
-                : currentPresetIndex - 1;
+                ? allPresets.size() - 1 : currentPresetIndex - 1;
             loadPresetByIndex(currentPresetIndex);
         };
 
@@ -199,13 +236,15 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
         {
             if (allPresets.isEmpty()) return;
             currentPresetIndex = (currentPresetIndex >= allPresets.size() - 1)
-                ? 0
-                : currentPresetIndex + 1;
+                ? 0 : currentPresetIndex + 1;
             loadPresetByIndex(currentPresetIndex);
         };
 
     presetNameBtn.onClick = [this] { showPresetMenu(); };
     presetSaveBtn.onClick = [this] { savePreset(); };
+    presetRandBtn.onClick = [this] { randomPreset(); };
+    presetRandParamBtn.onClick = [this] { randomizeParameters(); };
+
     presetLoadBtn.onClick = [this]
         {
             auto chooser = std::make_shared<juce::FileChooser>(
@@ -220,23 +259,16 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
                     result.loadFileAsData(data);
                     audioProcessor.setStateInformation(data.getData(), (int)data.getSize());
                     for (int i = 0; i < allPresets.size(); ++i)
-                    {
-                        if (allPresets[i].file == result)
-                        {
-                            currentPresetIndex = i;
-                            break;
-                        }
-                    }
+                        if (allPresets[i].file == result) { currentPresetIndex = i; break; }
                     updatePresetLabel();
                 });
         };
-    presetRandBtn.onClick = [this] { randomPreset(); };
-    presetRandParamBtn.onClick = [this] { randomizeParameters(); };
 
     refreshPresetList();
 
     auto& apvts = audioProcessor.apvts;
 
+    // Section panels
     addAndMakeVisible(quantizerPanel);
     addAndMakeVisible(resamplerPanel);
     addAndMakeVisible(filterPanel);
@@ -246,28 +278,29 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     addAndMakeVisible(stepSeqPanel);
     addAndMakeVisible(masterPanel);
 
+    // Quantizer
     setupKnob(bitDepthKnob, "Bit Depth");
     setupKnob(ditheringKnob, "Dithering");
-    addAndMakeVisible(bitDepthOnBtn);
     addAndMakeVisible(dcShiftBtn);
     bitDepthAtt = std::make_unique<SliderAtt>(apvts, "bitDepth", bitDepthKnob.knob);
     ditheringAtt = std::make_unique<SliderAtt>(apvts, "dithering", ditheringKnob.knob);
-    bitDepthOnAtt = std::make_unique<ButtonAtt>(apvts, "bitDepthEnabled", bitDepthOnBtn);
+    bitDepthOnAtt = std::make_unique<ButtonAtt>(apvts, "bitDepthEnabled", quantizerPanel.toggleBtn);
     dcShiftAtt = std::make_unique<ButtonAtt>(apvts, "dcShift", dcShiftBtn);
 
+    // Resampler
     setupKnob(resampleFreqKnob, "Frequency");
     setupKnob(approxDeviationKnob, "Deviation");
     setupKnob(imagesShiftKnob, "Img Shift");
-    addAndMakeVisible(resampleOnBtn);
     addAndMakeVisible(approxOnBtn);
     addAndMakeVisible(imagesOnBtn);
     resampleFreqAtt = std::make_unique<SliderAtt>(apvts, "resampleFreq", resampleFreqKnob.knob);
     approxDeviationAtt = std::make_unique<SliderAtt>(apvts, "approxDeviation", approxDeviationKnob.knob);
     imagesShiftAtt = std::make_unique<SliderAtt>(apvts, "imagesShift", imagesShiftKnob.knob);
-    resampleOnAtt = std::make_unique<ButtonAtt>(apvts, "resampleEnabled", resampleOnBtn);
+    resampleOnAtt = std::make_unique<ButtonAtt>(apvts, "resampleEnabled", resamplerPanel.toggleBtn);
     approxOnAtt = std::make_unique<ButtonAtt>(apvts, "approxEnabled", approxOnBtn);
     imagesOnAtt = std::make_unique<ButtonAtt>(apvts, "imagesEnabled", imagesOnBtn);
 
+    // Filter
     setupKnob(filterCutoffKnob, "Cutoff");
     setupKnob(filterResonanceKnob, "Resonance");
     setupCombo(filterTypeCombo, filterTypeLabel, "Type",
@@ -278,20 +311,21 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     filterTypeAtt = std::make_unique<ComboAtt>(apvts, "filterType", filterTypeCombo);
     filterOrderAtt = std::make_unique<ComboAtt>(apvts, "filterOrder", filterOrderCombo);
 
+    // WaveCrusher
     setupKnob(waveCrushAmountKnob, "Amount");
     setupCombo(waveCrushModeCombo, waveCrushModeLabel, "Mode", { "Fold", "Wrap", "Tanh" });
-    addAndMakeVisible(waveCrushOnBtn);
     waveCrushAmountAtt = std::make_unique<SliderAtt>(apvts, "waveCrushAmount", waveCrushAmountKnob.knob);
-    waveCrushOnAtt = std::make_unique<ButtonAtt>(apvts, "waveCrushEnabled", waveCrushOnBtn);
+    waveCrushOnAtt = std::make_unique<ButtonAtt>(apvts, "waveCrushEnabled", waveCrushPanel.toggleBtn);
     waveCrushModeAtt = std::make_unique<ComboAtt>(apvts, "waveCrushMode", waveCrushModeCombo);
 
+    // Ring Mod
     setupKnob(ringModFreqKnob, "Frequency");
     setupKnob(ringModMixKnob, "Mix");
-    addAndMakeVisible(ringModOnBtn);
     ringModFreqAtt = std::make_unique<SliderAtt>(apvts, "ringModFreq", ringModFreqKnob.knob);
     ringModMixAtt = std::make_unique<SliderAtt>(apvts, "ringModMix", ringModMixKnob.knob);
-    ringModOnAtt = std::make_unique<ButtonAtt>(apvts, "ringModEnabled", ringModOnBtn);
+    ringModOnAtt = std::make_unique<ButtonAtt>(apvts, "ringModEnabled", ringModPanel.toggleBtn);
 
+    // LFO
     setupKnob(lfoRateKnob, "Rate");
     setupKnob(lfoDepthKnob, "Depth");
     setupCombo(lfoWaveformCombo, lfoWaveformLabel, "Waveform",
@@ -303,19 +337,40 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     lfoWaveformAtt = std::make_unique<ComboAtt>(apvts, "lfoWaveform", lfoWaveformCombo);
     lfoTargetAtt = std::make_unique<ComboAtt>(apvts, "lfoTarget", lfoTargetCombo);
 
+    // Step Sequencer
     setupKnob(stepSeqRateKnob, "Rate");
     setupKnob(stepSeqDepthKnob, "Depth");
     setupCombo(stepSeqTargetCombo, stepSeqTargetLabel, "Target",
         { "Bit Depth", "Sample Rate", "WaveCrush", "Ring Freq" });
-    addAndMakeVisible(stepSeqOnBtn);
     stepSeqRateAtt = std::make_unique<SliderAtt>(apvts, "stepSeqRate", stepSeqRateKnob.knob);
     stepSeqDepthAtt = std::make_unique<SliderAtt>(apvts, "stepSeqDepth", stepSeqDepthKnob.knob);
-    stepSeqOnAtt = std::make_unique<ButtonAtt>(apvts, "stepSeqEnabled", stepSeqOnBtn);
+    stepSeqOnAtt = std::make_unique<ButtonAtt>(apvts, "stepSeqEnabled", stepSeqPanel.toggleBtn);
     stepSeqTargetAtt = std::make_unique<ComboAtt>(apvts, "stepSeqTarget", stepSeqTargetCombo);
 
     stepSeqGrid = std::make_unique<StepSequencerGrid>(apvts);
     addAndMakeVisible(*stepSeqGrid);
 
+    stepSeqRandBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff252538));
+    stepSeqRandBtn.setColour(juce::TextButton::textColourOffId, ACCENT);
+    addAndMakeVisible(stepSeqRandBtn);
+    stepSeqRandBtn.onClick = [this]
+        {
+            juce::Random rng;
+            auto& apvts = audioProcessor.apvts;
+            for (int i = 0; i < 16; ++i)
+            {
+                auto id = juce::String("stepSeqStep") + juce::String(i);
+                if (auto* param = apvts.getParameter(id))
+                {
+                    param->beginChangeGesture();
+                    param->setValueNotifyingHost(rng.nextFloat());
+                    param->endChangeGesture();
+                }
+            }
+            if (stepSeqGrid != nullptr) stepSeqGrid->repaint();
+        };
+
+    // Master
     setupKnob(preampKnob, "Preamp");
     setupKnob(fxMixKnob, "FX Mix");
     setupKnob(outputVolumeKnob, "Output");
@@ -323,9 +378,7 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     fxMixAtt = std::make_unique<SliderAtt>(apvts, "fxMix", fxMixKnob.knob);
     outputVolumeAtt = std::make_unique<SliderAtt>(apvts, "outputVolume", outputVolumeKnob.knob);
 
-    setSize(1200, 800);
-
-
+    setSize(1200, 820);
 }
 
 BitMorphAudioProcessorEditor::~BitMorphAudioProcessorEditor()
@@ -335,6 +388,7 @@ BitMorphAudioProcessorEditor::~BitMorphAudioProcessorEditor()
     setLookAndFeel(nullptr);
 }
 
+// ── Paint ─────────────────────────────────────────────────────────────────────
 void BitMorphAudioProcessorEditor::paint(juce::Graphics& g)
 {
     g.fillAll(BG_DARK);
@@ -358,12 +412,13 @@ void BitMorphAudioProcessorEditor::paint(juce::Graphics& g)
     g.fillRect(0, 40, getWidth(), 20);
 }
 
+// ── Resized ───────────────────────────────────────────────────────────────────
 void BitMorphAudioProcessorEditor::resized()
 {
     const int W = getWidth();
     const int GAP = 3;
     const int HEADERH = 60;
-    const int MASTERH = 95;
+    const int MASTERH = 115;
     const int STEPSEQH = 200;
     const int ROW1H = 185;
     const int ROW2H = 180;
@@ -404,7 +459,6 @@ void BitMorphAudioProcessorEditor::resized()
         int  kw = (b.getWidth() - 12) / 2;
         placeKnobAt(bitDepthKnob, ix, iy, kw);
         placeKnobAt(ditheringKnob, ix + kw, iy, kw);
-        bitDepthOnBtn.setBounds(ix, iy + 74, kw, 18);
         dcShiftBtn.setBounds(ix + kw, iy + 74, kw, 18);
     }
 
@@ -418,9 +472,8 @@ void BitMorphAudioProcessorEditor::resized()
         placeKnobAt(resampleFreqKnob, ix, iy, kw);
         placeKnobAt(approxDeviationKnob, ix + kw, iy, kw);
         placeKnobAt(imagesShiftKnob, ix + kw * 2, iy, kw);
-        resampleOnBtn.setBounds(ix, iy + 74, fw, 16);
-        approxOnBtn.setBounds(ix, iy + 74 + 18, fw, 16);
-        imagesOnBtn.setBounds(ix, iy + 74 + 36, fw, 16);
+        approxOnBtn.setBounds(ix, iy + 74, fw, 16);
+        imagesOnBtn.setBounds(ix, iy + 74 + 18, fw, 16);
     }
 
     // Filter
@@ -452,9 +505,8 @@ void BitMorphAudioProcessorEditor::resized()
         int  iy = b.getY() + 30;
         int  fw = b.getWidth() - 12;
         placeKnobAt(waveCrushAmountKnob, ix, iy, fw);
-        waveCrushOnBtn.setBounds(ix, iy + 74, fw, 18);
-        waveCrushModeLabel.setBounds(ix, iy + 74 + 22, 38, 22);
-        waveCrushModeCombo.setBounds(ix + 38, iy + 74 + 22, fw - 38, 22);
+        waveCrushModeLabel.setBounds(ix, iy + 74, 38, 22);
+        waveCrushModeCombo.setBounds(ix + 38, iy + 74, fw - 38, 22);
     }
 
     // Ring Mod
@@ -463,10 +515,8 @@ void BitMorphAudioProcessorEditor::resized()
         int  ix = b.getX() + 6;
         int  iy = b.getY() + 30;
         int  kw = (b.getWidth() - 12) / 2;
-        int  fw = b.getWidth() - 12;
         placeKnobAt(ringModFreqKnob, ix, iy, kw);
         placeKnobAt(ringModMixKnob, ix + kw, iy, kw);
-        ringModOnBtn.setBounds(ix, iy + 74, fw, 18);
     }
 
     // LFO
@@ -496,9 +546,9 @@ void BitMorphAudioProcessorEditor::resized()
 
         placeKnobAt(stepSeqRateKnob, ix, iy, kw);
         placeKnobAt(stepSeqDepthKnob, ix + kw, iy, kw);
-        stepSeqOnBtn.setBounds(ix, iy + 74, ctrlW, 18);
-        stepSeqTargetLabel.setBounds(ix, iy + 96, 44, 22);
-        stepSeqTargetCombo.setBounds(ix + 44, iy + 96, ctrlW - 44, 22);
+        stepSeqTargetLabel.setBounds(ix, iy + 74, 44, 22);
+        stepSeqTargetCombo.setBounds(ix + 44, iy + 74, ctrlW - 58, 22);
+        stepSeqRandBtn.setBounds(ix + ctrlW - 12, iy + 74, 18, 22);
 
         int gx = b.getX() + 6 + ctrlW + 8;
         int gy = b.getY() + 26;
@@ -514,7 +564,7 @@ void BitMorphAudioProcessorEditor::resized()
     {
         auto b = masterPanel.getBounds();
         int  ix = b.getX() + 6;
-        int  iy = b.getY() + 22;
+        int  iy = b.getY() + 30;
         int  kw = (b.getWidth() - 12) / 3;
         placeKnobAt(preampKnob, ix, iy, kw);
         placeKnobAt(fxMixKnob, ix + kw, iy, kw);
