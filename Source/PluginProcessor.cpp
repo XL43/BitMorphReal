@@ -71,7 +71,7 @@ BitMorphAudioProcessor::createParameterLayout()
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID(id.toStdString().c_str(), 1), name,
             juce::NormalisableRange<float>(-1.0f, 1.0f, 0.001f),
-            (i % 4 == 0) ? 0.8f : 0.0f));
+            (i % 2 == 0) ? 0.8f : -0.4f));
     }
 
     addFloat("fxMix", "FX Mix", 0.0f, 1.0f, 0.001f, 1.0f, 1.0f);

@@ -5,7 +5,7 @@ static const juce::Colour BG_PANEL(0xff141428);
 static const juce::Colour BG_HEADER(0xff1a1a35);
 static const juce::Colour ACCENT(0xffe94560);
 static const juce::Colour TEXT_LIGHT(0xffddddee);
-static const juce::Colour TEXT_MUTED(0xff888899);
+static const juce::Colour TEXT_MUTED(0xffaabbcc);
 static const juce::Colour KNOB_BODY(0xff252538);
 static const juce::Colour BORDER_CLR(0xff2a2a45);
 
@@ -128,7 +128,7 @@ void BitMorphAudioProcessorEditor::setupKnob(KnobSet& k, const juce::String& lab
     k.knob.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 64, 16);
     k.label.setText(labelText, juce::dontSendNotification);
     k.label.setJustificationType(juce::Justification::centred);
-    k.label.setFont(10.0f);
+    k.label.setFont(12.0f);
     k.label.setColour(juce::Label::textColourId, TEXT_MUTED);
     addAndMakeVisible(k.knob);
     addAndMakeVisible(k.label);
@@ -161,7 +161,6 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     : AudioProcessorEditor(&p), audioProcessor(p)
 {
     setLookAndFeel(&lookAndFeel);
-    setSize(1200, 660);
 
     // Preset bar
     auto styleBtn = [](juce::TextButton& b, juce::Colour bg, juce::Colour fg)
@@ -314,6 +313,9 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     stepSeqOnAtt = std::make_unique<ButtonAtt>(apvts, "stepSeqEnabled", stepSeqOnBtn);
     stepSeqTargetAtt = std::make_unique<ComboAtt>(apvts, "stepSeqTarget", stepSeqTargetCombo);
 
+    stepSeqGrid = std::make_unique<StepSequencerGrid>(apvts);
+    addAndMakeVisible(*stepSeqGrid);
+
     setupKnob(preampKnob, "Preamp");
     setupKnob(fxMixKnob, "FX Mix");
     setupKnob(outputVolumeKnob, "Output");
@@ -321,11 +323,14 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     fxMixAtt = std::make_unique<SliderAtt>(apvts, "fxMix", fxMixKnob.knob);
     outputVolumeAtt = std::make_unique<SliderAtt>(apvts, "outputVolume", outputVolumeKnob.knob);
 
+    setSize(1200, 800);
+
 
 }
 
 BitMorphAudioProcessorEditor::~BitMorphAudioProcessorEditor()
 {
+    stepSeqGrid.reset();
     setLookAndFeel(nullptr);
 }
 
@@ -334,159 +339,184 @@ void BitMorphAudioProcessorEditor::paint(juce::Graphics& g)
     g.fillAll(BG_DARK);
 
     g.setColour(juce::Colour(0xff0a0a18));
-    g.fillRect(0, 0, getWidth(), 40);
+    g.fillRect(0, 0, getWidth(), 60);
 
     g.setColour(ACCENT);
     g.fillRect(0, 58, getWidth(), 2);
 
-    g.setColour (TEXT_LIGHT);
-    g.setFont (juce::Font (20.0f, juce::Font::bold));
-    g.drawText ("BITMORPH", 16, 0, 200, 60, juce::Justification::centredLeft);
+    g.setColour(TEXT_LIGHT);
+    g.setFont(juce::Font(20.0f, juce::Font::bold));
+    g.drawText("BITMORPH", 16, 0, 200, 60, juce::Justification::centredLeft);
 
-    g.setColour (TEXT_MUTED);
-    g.setFont (9.5f);
-    g.drawText ("evrshade 2026", 0, 0, getWidth() - 16, 60,
-                juce::Justification::centredRight);
+    g.setColour(TEXT_MUTED);
+    g.setFont(9.5f);
+    g.drawText("evrshade 2026", 0, 0, getWidth() - 16, 60,
+        juce::Justification::centredRight);
 
-    // Preset bar background
-    g.setColour (juce::Colour (0xff12121f));
-    g.fillRect (0, 40, getWidth(), 20);
+    g.setColour(juce::Colour(0xff12121f));
+    g.fillRect(0, 40, getWidth(), 20);
 }
 
 void BitMorphAudioProcessorEditor::resized()
 {
     const int W = getWidth();
-    const int GAP = 4;
+    const int GAP = 3;
     const int HEADERH = 60;
+    const int MASTERH = 95;
+    const int STEPSEQH = 200;
+    const int ROW1H = 185;
+    const int ROW2H = 180;
 
-    // Preset bar
-    int pbY = 40;
-    int pbH = 20;
-    int btnW = 44;
-    presetPrevBtn.setBounds(4, pbY, 24, pbH);
-    presetNextBtn.setBounds(30, pbY, 24, pbH);
-    presetNameBtn.setBounds(58, pbY, W - 58 - (btnW * 4) - 12, pbH);
-    presetRandBtn.setBounds(W - (btnW * 4) - 8, pbY, btnW, pbH);
-    presetRandParamBtn.setBounds(W - (btnW * 3) - 6, pbY, btnW, pbH);
-    presetSaveBtn.setBounds(W - (btnW * 2) - 4, pbY, btnW, pbH);
-    presetLoadBtn.setBounds(W - btnW - 2, pbY, btnW, pbH);
+    // ── Preset bar ────────────────────────────────────────────────────────────
+    {
+        int y = 40;
+        int h = 18;
+        int bw = 44;
+        presetPrevBtn.setBounds(4, y, 22, h);
+        presetNextBtn.setBounds(28, y, 22, h);
+        presetNameBtn.setBounds(52, y, W - 52 - bw * 4 - 10, h);
+        presetRandBtn.setBounds(W - bw * 4 - 6, y, bw, h);
+        presetRandParamBtn.setBounds(W - bw * 3 - 4, y, bw, h);
+        presetSaveBtn.setBounds(W - bw * 2 - 2, y, bw, h);
+        presetLoadBtn.setBounds(W - bw, y, bw, h);
+    }
 
-    const int MASTERH = 130;
-    const int ROWH = (getHeight() - HEADERH - MASTERH - GAP * 3) / 2;
+    auto placeKnobAt = [](KnobSet& k, int x, int y, int w)
+        {
+            int kx = x + (w - 56) / 2;
+            k.knob.setBounds(kx, y, 56, 56);
+            k.label.setBounds(x, y + 58, w, 14);
+        };
 
+    // ── Row 1 ─────────────────────────────────────────────────────────────────
     int r1y = HEADERH + GAP;
-    int secW1 = W / 3;
-
-    quantizerPanel.setBounds(juce::Rectangle<int>(0, r1y, secW1, ROWH).reduced(GAP));
-    resamplerPanel.setBounds(juce::Rectangle<int>(secW1, r1y, secW1, ROWH).reduced(GAP));
-    filterPanel.setBounds(juce::Rectangle<int>(secW1 * 2, r1y, secW1, ROWH).reduced(GAP));
+    int sw1 = W / 3;
+    quantizerPanel.setBounds(juce::Rectangle<int>(0, r1y, sw1, ROW1H).reduced(GAP));
+    resamplerPanel.setBounds(juce::Rectangle<int>(sw1, r1y, sw1, ROW1H).reduced(GAP));
+    filterPanel.setBounds(juce::Rectangle<int>(sw1 * 2, r1y, sw1, ROW1H).reduced(GAP));
 
     // Quantizer
     {
-        auto area = quantizerPanel.getBounds().reduced(6).withTrimmedTop(22);
-        auto knobRow = area.removeFromTop(area.getHeight() - 54);
-        auto left = knobRow.removeFromLeft(knobRow.getWidth() / 2);
-        placeKnob(bitDepthKnob, left.reduced(8, 4));
-        placeKnob(ditheringKnob, knobRow.reduced(8, 4));
-        bitDepthOnBtn.setBounds(area.removeFromTop(22).reduced(4, 2));
-        dcShiftBtn.setBounds(area.removeFromTop(22).reduced(4, 2));
+        auto b = quantizerPanel.getBounds();
+        int  ix = b.getX() + 6;
+        int  iy = b.getY() + 30;
+        int  kw = (b.getWidth() - 12) / 2;
+        placeKnobAt(bitDepthKnob, ix, iy, kw);
+        placeKnobAt(ditheringKnob, ix + kw, iy, kw);
+        bitDepthOnBtn.setBounds(ix, iy + 74, kw, 18);
+        dcShiftBtn.setBounds(ix + kw, iy + 74, kw, 18);
     }
 
     // Resampler
     {
-        auto area = resamplerPanel.getBounds().reduced(6).withTrimmedTop(22);
-        auto knobRow = area.removeFromTop(area.getHeight() - 74);
-        auto freqArea = knobRow.removeFromLeft(knobRow.getWidth() / 3);
-        auto devArea = knobRow.removeFromLeft(knobRow.getWidth() / 2);
-        placeKnob(resampleFreqKnob, freqArea.reduced(6, 4));
-        placeKnob(approxDeviationKnob, devArea.reduced(6, 4));
-        placeKnob(imagesShiftKnob, knobRow.reduced(6, 4));
-        resampleOnBtn.setBounds(area.removeFromTop(22).reduced(4, 2));
-        approxOnBtn.setBounds(area.removeFromTop(22).reduced(4, 2));
-        imagesOnBtn.setBounds(area.removeFromTop(22).reduced(4, 2));
+        auto b = resamplerPanel.getBounds();
+        int  ix = b.getX() + 6;
+        int  iy = b.getY() + 30;
+        int  kw = (b.getWidth() - 12) / 3;
+        int  fw = b.getWidth() - 12;
+        placeKnobAt(resampleFreqKnob, ix, iy, kw);
+        placeKnobAt(approxDeviationKnob, ix + kw, iy, kw);
+        placeKnobAt(imagesShiftKnob, ix + kw * 2, iy, kw);
+        resampleOnBtn.setBounds(ix, iy + 74, fw, 16);
+        approxOnBtn.setBounds(ix, iy + 74 + 18, fw, 16);
+        imagesOnBtn.setBounds(ix, iy + 74 + 36, fw, 16);
     }
 
     // Filter
     {
-        auto area = filterPanel.getBounds().reduced(6).withTrimmedTop(22);
-        auto knobRow = area.removeFromTop(area.getHeight() - 64);
-        auto left = knobRow.removeFromLeft(knobRow.getWidth() / 2);
-        placeKnob(filterCutoffKnob, left.reduced(8, 4));
-        placeKnob(filterResonanceKnob, knobRow.reduced(8, 4));
-        auto typeRow = area.removeFromTop(30);
-        filterTypeLabel.setBounds(typeRow.removeFromLeft(40).reduced(0, 4));
-        filterTypeCombo.setBounds(typeRow.reduced(2, 4));
-        auto orderRow = area.removeFromTop(30);
-        filterOrderLabel.setBounds(orderRow.removeFromLeft(40).reduced(0, 4));
-        filterOrderCombo.setBounds(orderRow.reduced(2, 4));
+        auto b = filterPanel.getBounds();
+        int  ix = b.getX() + 6;
+        int  iy = b.getY() + 30;
+        int  kw = (b.getWidth() - 12) / 2;
+        int  fw = b.getWidth() - 12;
+        placeKnobAt(filterCutoffKnob, ix, iy, kw);
+        placeKnobAt(filterResonanceKnob, ix + kw, iy, kw);
+        filterTypeLabel.setBounds(ix, iy + 74, 38, 22);
+        filterTypeCombo.setBounds(ix + 38, iy + 74, fw - 38, 22);
+        filterOrderLabel.setBounds(ix, iy + 74 + 26, 38, 22);
+        filterOrderCombo.setBounds(ix + 38, iy + 74 + 26, fw - 38, 22);
     }
 
-    int r2y = r1y + ROWH + GAP;
-    int secW2 = W / 4;
-
-    waveCrushPanel.setBounds(juce::Rectangle<int>(0, r2y, secW2, ROWH).reduced(GAP));
-    ringModPanel.setBounds(juce::Rectangle<int>(secW2, r2y, secW2, ROWH).reduced(GAP));
-    lfoPanel.setBounds(juce::Rectangle<int>(secW2 * 2, r2y, secW2, ROWH).reduced(GAP));
-    stepSeqPanel.setBounds(juce::Rectangle<int>(secW2 * 3, r2y, secW2, ROWH).reduced(GAP));
+    // ── Row 2 ─────────────────────────────────────────────────────────────────
+    int r2y = r1y + ROW1H + GAP;
+    int sw2 = W / 3;
+    waveCrushPanel.setBounds(juce::Rectangle<int>(0, r2y, sw2, ROW2H).reduced(GAP));
+    ringModPanel.setBounds(juce::Rectangle<int>(sw2, r2y, sw2, ROW2H).reduced(GAP));
+    lfoPanel.setBounds(juce::Rectangle<int>(sw2 * 2, r2y, sw2, ROW2H).reduced(GAP));
 
     // WaveCrusher
     {
-        auto area = waveCrushPanel.getBounds().reduced(6).withTrimmedTop(22);
-        auto knobRow = area.removeFromTop(area.getHeight() - 50);
-        placeKnob(waveCrushAmountKnob, knobRow.reduced(20, 4));
-        waveCrushOnBtn.setBounds(area.removeFromTop(22).reduced(4, 2));
-        auto modeRow = area.removeFromTop(28);
-        waveCrushModeLabel.setBounds(modeRow.removeFromLeft(44).reduced(0, 4));
-        waveCrushModeCombo.setBounds(modeRow.reduced(2, 4));
+        auto b = waveCrushPanel.getBounds();
+        int  ix = b.getX() + 6;
+        int  iy = b.getY() + 30;
+        int  fw = b.getWidth() - 12;
+        placeKnobAt(waveCrushAmountKnob, ix, iy, fw);
+        waveCrushOnBtn.setBounds(ix, iy + 74, fw, 18);
+        waveCrushModeLabel.setBounds(ix, iy + 74 + 22, 38, 22);
+        waveCrushModeCombo.setBounds(ix + 38, iy + 74 + 22, fw - 38, 22);
     }
 
     // Ring Mod
     {
-        auto area = ringModPanel.getBounds().reduced(6).withTrimmedTop(22);
-        auto knobRow = area.removeFromTop(area.getHeight() - 30);
-        auto left = knobRow.removeFromLeft(knobRow.getWidth() / 2);
-        placeKnob(ringModFreqKnob, left.reduced(6, 4));
-        placeKnob(ringModMixKnob, knobRow.reduced(6, 4));
-        ringModOnBtn.setBounds(area.removeFromTop(22).reduced(4, 2));
+        auto b = ringModPanel.getBounds();
+        int  ix = b.getX() + 6;
+        int  iy = b.getY() + 30;
+        int  kw = (b.getWidth() - 12) / 2;
+        int  fw = b.getWidth() - 12;
+        placeKnobAt(ringModFreqKnob, ix, iy, kw);
+        placeKnobAt(ringModMixKnob, ix + kw, iy, kw);
+        ringModOnBtn.setBounds(ix, iy + 74, fw, 18);
     }
 
     // LFO
     {
-        auto area = lfoPanel.getBounds().reduced(6).withTrimmedTop(22);
-        auto knobRow = area.removeFromTop(area.getHeight() - 60);
-        auto left = knobRow.removeFromLeft(knobRow.getWidth() / 2);
-        placeKnob(lfoRateKnob, left.reduced(6, 4));
-        placeKnob(lfoDepthKnob, knobRow.reduced(6, 4));
-        auto waveRow = area.removeFromTop(28);
-        lfoWaveformLabel.setBounds(waveRow.removeFromLeft(50).reduced(0, 4));
-        lfoWaveformCombo.setBounds(waveRow.reduced(2, 4));
-        auto targRow = area.removeFromTop(28);
-        lfoTargetLabel.setBounds(targRow.removeFromLeft(50).reduced(0, 4));
-        lfoTargetCombo.setBounds(targRow.reduced(2, 4));
+        auto b = lfoPanel.getBounds();
+        int  ix = b.getX() + 6;
+        int  iy = b.getY() + 30;
+        int  kw = (b.getWidth() - 12) / 2;
+        int  fw = b.getWidth() - 12;
+        placeKnobAt(lfoRateKnob, ix, iy, kw);
+        placeKnobAt(lfoDepthKnob, ix + kw, iy, kw);
+        lfoWaveformLabel.setBounds(ix, iy + 74, 46, 22);
+        lfoWaveformCombo.setBounds(ix + 46, iy + 74, fw - 46, 22);
+        lfoTargetLabel.setBounds(ix, iy + 74 + 26, 46, 22);
+        lfoTargetCombo.setBounds(ix + 46, iy + 74 + 26, fw - 46, 22);
     }
 
-    // Step Sequencer
+    // ── Row 3: Step Sequencer ─────────────────────────────────────────────────
+    int r3y = r2y + ROW2H + GAP;
+    int ctrlW = 150;
+    stepSeqPanel.setBounds(GAP, r3y, W - GAP * 2, STEPSEQH);
     {
-        auto area = stepSeqPanel.getBounds().reduced(6).withTrimmedTop(22);
-        auto knobRow = area.removeFromTop(area.getHeight() - 54);
-        auto left = knobRow.removeFromLeft(knobRow.getWidth() / 2);
-        placeKnob(stepSeqRateKnob, left.reduced(6, 4));
-        placeKnob(stepSeqDepthKnob, knobRow.reduced(6, 4));
-        stepSeqOnBtn.setBounds(area.removeFromTop(22).reduced(4, 2));
-        auto targRow = area.removeFromTop(28);
-        stepSeqTargetLabel.setBounds(targRow.removeFromLeft(44).reduced(0, 4));
-        stepSeqTargetCombo.setBounds(targRow.reduced(2, 4));
+        auto b = stepSeqPanel.getBounds();
+        int  ix = b.getX() + 6;
+        int  iy = b.getY() + 30;
+        int  kw = ctrlW / 2;
+
+        placeKnobAt(stepSeqRateKnob, ix, iy, kw);
+        placeKnobAt(stepSeqDepthKnob, ix + kw, iy, kw);
+        stepSeqOnBtn.setBounds(ix, iy + 74, ctrlW, 18);
+        stepSeqTargetLabel.setBounds(ix, iy + 96, 44, 22);
+        stepSeqTargetCombo.setBounds(ix + 44, iy + 96, ctrlW - 44, 22);
+
+        int gx = b.getX() + 6 + ctrlW + 8;
+        int gy = b.getY() + 26;
+        int gw = b.getWidth() - 12 - ctrlW - 8;
+        int gh = b.getHeight() - 32;
+        if (stepSeqGrid != nullptr)
+            stepSeqGrid->setBounds(gx, gy, gw, gh);
     }
 
-    // Master
-    int masy = r2y + ROWH + GAP;
-    masterPanel.setBounds(GAP, masy, W - GAP * 2, MASTERH - GAP);
+    // ── Row 4: Master ─────────────────────────────────────────────────────────
+    int r4y = r3y + STEPSEQH + GAP;
+    masterPanel.setBounds(GAP, r4y, W - GAP * 2, MASTERH - GAP);
     {
-        auto area = masterPanel.getBounds().reduced(6).withTrimmedTop(22);
-        auto vuArea = area.removeFromRight(60);
-        int kw = area.getWidth() / 3;
-        placeKnob(preampKnob, area.removeFromLeft(kw).reduced(16, 4));
-        placeKnob(fxMixKnob, area.removeFromLeft(kw).reduced(16, 4));
-        placeKnob(outputVolumeKnob, area.reduced(16, 4));
+        auto b = masterPanel.getBounds();
+        int  ix = b.getX() + 6;
+        int  iy = b.getY() + 22;
+        int  kw = (b.getWidth() - 12) / 3;
+        placeKnobAt(preampKnob, ix, iy, kw);
+        placeKnobAt(fxMixKnob, ix + kw, iy, kw);
+        placeKnobAt(outputVolumeKnob, ix + kw * 2, iy, kw);
     }
 }

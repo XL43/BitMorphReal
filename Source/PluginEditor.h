@@ -22,6 +22,85 @@ private:
     juce::String sectionTitle;
 };
 
+// ── Step Sequencer Grid - no timer, purely interactive ────────────────────────
+class StepSequencerGrid : public juce::Component
+{
+public:
+    StepSequencerGrid(juce::AudioProcessorValueTreeState& a) : apvts(a) {}
+    ~StepSequencerGrid() override {}
+
+    void paint(juce::Graphics& g) override
+    {
+        auto        bounds = getLocalBounds().toFloat();
+        const int   numSteps = 16;
+        const float stepW = bounds.getWidth() / numSteps;
+        const float midY = bounds.getCentreY();
+        const float maxH = bounds.getHeight() * 0.5f - 4.0f;
+
+        g.setColour(juce::Colour(0xff0d0d1a));
+        g.fillRoundedRectangle(bounds, 3.0f);
+
+        g.setColour(juce::Colour(0xff2a2a45));
+        g.fillRect(bounds.getX(), midY - 0.5f, bounds.getWidth(), 1.0f);
+
+        for (int i = 0; i < numSteps; ++i)
+        {
+            auto  id = juce::String("stepSeqStep") + juce::String(i);
+            auto* raw = apvts.getRawParameterValue(id.toStdString().c_str());
+            float val = (raw != nullptr) ? raw->load() : 0.0f;
+
+            float barH = std::abs(val) * maxH;
+            float barX = bounds.getX() + i * stepW + 1.0f;
+            float barW = stepW - 2.0f;
+            float barY = (val >= 0.0f) ? midY - barH : midY;
+
+            g.setColour(juce::Colour(0xff1a1a30));
+            g.fillRect(barX, bounds.getY() + 1.0f, barW, bounds.getHeight() - 2.0f);
+
+            if (std::abs(val) > 0.01f)
+            {
+                g.setColour(val >= 0.0f ? juce::Colour(0xffe94560)
+                    : juce::Colour(0xff8b1a2e));
+                g.fillRect(barX + 1.0f, barY, barW - 2.0f, barH);
+            }
+
+            g.setColour(juce::Colour(0xff444466));
+            g.setFont(8.0f);
+            g.drawText(juce::String(i + 1),
+                (int)barX, (int)(bounds.getBottom() - 12),
+                (int)barW, 12, juce::Justification::centred);
+        }
+
+        g.setColour(juce::Colour(0xff2a2a45));
+        g.drawRoundedRectangle(bounds.reduced(0.5f), 3.0f, 1.0f);
+    }
+
+    void mouseDown(const juce::MouseEvent& e) override { setStepFromMouse(e); }
+    void mouseDrag(const juce::MouseEvent& e) override { setStepFromMouse(e); }
+
+private:
+    void setStepFromMouse(const juce::MouseEvent& e)
+    {
+        const int   numSteps = 16;
+        const float stepW = getWidth() / (float)numSteps;
+        int idx = juce::jlimit(0, numSteps - 1, (int)(e.position.x / stepW));
+
+        float val = 1.0f - (e.position.y / getHeight()) * 2.0f;
+        val = juce::jlimit(-1.0f, 1.0f, val);
+
+        auto id = juce::String("stepSeqStep") + juce::String(idx);
+        if (auto* param = apvts.getParameter(id))
+        {
+            param->beginChangeGesture();
+            param->setValueNotifyingHost((val + 1.0f) * 0.5f);
+            param->endChangeGesture();
+        }
+        repaint();
+    }
+
+    juce::AudioProcessorValueTreeState& apvts;
+};
+
 // ── VU Meter ──────────────────────────────────────────────────────────────────
 class VUMeter : public juce::Component, public juce::Timer
 {
@@ -208,6 +287,8 @@ private:
         audioProcessor.setStateInformation(data.getData(), (int)data.getSize());
         currentPresetIndex = index;
         updatePresetLabel();
+        if (stepSeqGrid != nullptr)
+            stepSeqGrid->repaint();
     }
 
     void savePreset()
@@ -259,6 +340,8 @@ private:
         }
         currentPresetIndex = -1;
         presetNameBtn.setButtonText("-- Randomized --");
+        if (stepSeqGrid != nullptr)
+            stepSeqGrid->repaint();
     }
 
     void showPresetMenu()
@@ -354,6 +437,7 @@ private:
     juce::ToggleButton stepSeqOnBtn{ "Step Seq On" };
     juce::ComboBox     stepSeqTargetCombo;
     juce::Label        stepSeqTargetLabel{ {}, "Target" };
+    std::unique_ptr<StepSequencerGrid> stepSeqGrid;
 
     KnobSet            preampKnob;
     KnobSet            fxMixKnob;
