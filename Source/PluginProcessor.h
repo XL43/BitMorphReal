@@ -35,6 +35,9 @@ public:
 
     int getStepSequencerCurrentStep() const { return stepSeq.getCurrentStep(); }
 
+    // For step sequencer highlight in UI
+    int getCurrentStepSeqStep() const noexcept { return stepSeq.getCurrentStep(); }
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 

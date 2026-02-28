@@ -362,7 +362,7 @@ public:
     void setTarget(Target t) { target = t; }
     void setEnabled(bool e) { enabled = e; }
     Target getTarget()   const { return target; }
-    int getCurrentStep() const { return currentStep; }
+    int getCurrentStep() const noexcept { return currentStep; }
 
     float tick()
     {

@@ -64,6 +64,15 @@ public:
                 g.fillRect(barX + 1.0f, barY, barW - 2.0f, barH);
             }
 
+            // Current step highlight
+            if (i == currentStep)
+            {
+                g.setColour(juce::Colours::white.withAlpha(0.15f));
+                g.fillRect(barX, bounds.getY() + 1.0f, barW, bounds.getHeight() - 2.0f);
+                g.setColour(juce::Colours::white.withAlpha(0.6f));
+                g.fillRect(barX, bounds.getY() + 1.0f, barW, 2.0f);
+            }
+
             g.setColour(juce::Colour(0xff444466));
             g.setFont(8.0f);
             g.drawText(juce::String(i + 1),
@@ -77,6 +86,15 @@ public:
 
     void mouseDown(const juce::MouseEvent& e) override { setStepFromMouse(e); }
     void mouseDrag(const juce::MouseEvent& e) override { setStepFromMouse(e); }
+
+    void setCurrentStep(int step)
+    {
+        if (step != currentStep)
+        {
+            currentStep = step;
+            repaint();
+        }
+    }
 
 private:
     void setStepFromMouse(const juce::MouseEvent& e)
@@ -99,6 +117,7 @@ private:
     }
 
     juce::AudioProcessorValueTreeState& apvts;
+    int currentStep = -1;
 };
 
 // ── VU Meter ──────────────────────────────────────────────────────────────────
@@ -183,13 +202,28 @@ private:
     float levelR = 0.0f;
 };
 
-class BitMorphAudioProcessorEditor : public juce::AudioProcessorEditor
+class BitMorphAudioProcessorEditor : public juce::AudioProcessorEditor,
+    public juce::Timer
 {
 public:
     BitMorphAudioProcessorEditor(BitMorphAudioProcessor&);
     ~BitMorphAudioProcessorEditor() override;
     void paint(juce::Graphics&) override;
     void resized() override;
+
+    void parentHierarchyChanged() override
+    {
+        if (isShowing())
+            startTimerHz(30);
+        else
+            stopTimer();
+    }
+
+    void timerCallback() override
+    {
+        if (stepSeqGrid != nullptr)
+            stepSeqGrid->setCurrentStep(audioProcessor.getCurrentStepSeqStep());
+    }
 
 private:
     BitMorphAudioProcessor& audioProcessor;

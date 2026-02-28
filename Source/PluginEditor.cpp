@@ -330,6 +330,7 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
 
 BitMorphAudioProcessorEditor::~BitMorphAudioProcessorEditor()
 {
+    stopTimer();
     stepSeqGrid.reset();
     setLookAndFeel(nullptr);
 }
