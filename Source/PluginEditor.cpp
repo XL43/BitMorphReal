@@ -163,6 +163,79 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     setLookAndFeel(&lookAndFeel);
     setSize(1200, 660);
 
+    // Preset bar
+    auto styleBtn = [](juce::TextButton& b, juce::Colour bg, juce::Colour fg)
+        {
+            b.setColour(juce::TextButton::buttonColourId, bg);
+            b.setColour(juce::TextButton::textColourOffId, fg);
+        };
+
+    styleBtn(presetPrevBtn, juce::Colour(0xff1a1a35), TEXT_LIGHT);
+    styleBtn(presetNextBtn, juce::Colour(0xff1a1a35), TEXT_LIGHT);
+    styleBtn(presetSaveBtn, ACCENT, TEXT_LIGHT);
+    styleBtn(presetLoadBtn, juce::Colour(0xff252538), TEXT_LIGHT);
+    styleBtn(presetRandBtn, juce::Colour(0xff252538), TEXT_LIGHT);
+    styleBtn(presetRandParamBtn, juce::Colour(0xff252538), ACCENT);
+    styleBtn(presetNameBtn, juce::Colour(0xff1a1a35), TEXT_LIGHT);
+    presetNameBtn.setButtonText("-- Init --");
+
+    addAndMakeVisible(presetPrevBtn);
+    addAndMakeVisible(presetNextBtn);
+    addAndMakeVisible(presetSaveBtn);
+    addAndMakeVisible(presetLoadBtn);
+    addAndMakeVisible(presetRandBtn);
+    addAndMakeVisible(presetRandParamBtn);
+    addAndMakeVisible(presetNameBtn);
+
+    presetPrevBtn.onClick = [this]
+        {
+            if (allPresets.isEmpty()) return;
+            currentPresetIndex = (currentPresetIndex <= 0)
+                ? allPresets.size() - 1
+                : currentPresetIndex - 1;
+            loadPresetByIndex(currentPresetIndex);
+        };
+
+    presetNextBtn.onClick = [this]
+        {
+            if (allPresets.isEmpty()) return;
+            currentPresetIndex = (currentPresetIndex >= allPresets.size() - 1)
+                ? 0
+                : currentPresetIndex + 1;
+            loadPresetByIndex(currentPresetIndex);
+        };
+
+    presetNameBtn.onClick = [this] { showPresetMenu(); };
+    presetSaveBtn.onClick = [this] { savePreset(); };
+    presetLoadBtn.onClick = [this]
+        {
+            auto chooser = std::make_shared<juce::FileChooser>(
+                "Load Preset", getPresetsFolder(), "*.xml");
+            chooser->launchAsync(juce::FileBrowserComponent::openMode |
+                juce::FileBrowserComponent::canSelectFiles,
+                [this, chooser](const juce::FileChooser& fc)
+                {
+                    auto result = fc.getResult();
+                    if (!result.existsAsFile()) return;
+                    juce::MemoryBlock data;
+                    result.loadFileAsData(data);
+                    audioProcessor.setStateInformation(data.getData(), (int)data.getSize());
+                    for (int i = 0; i < allPresets.size(); ++i)
+                    {
+                        if (allPresets[i].file == result)
+                        {
+                            currentPresetIndex = i;
+                            break;
+                        }
+                    }
+                    updatePresetLabel();
+                });
+        };
+    presetRandBtn.onClick = [this] { randomPreset(); };
+    presetRandParamBtn.onClick = [this] { randomizeParameters(); };
+
+    refreshPresetList();
+
     auto& apvts = audioProcessor.apvts;
 
     addAndMakeVisible(quantizerPanel);
@@ -264,23 +337,40 @@ void BitMorphAudioProcessorEditor::paint(juce::Graphics& g)
     g.fillRect(0, 0, getWidth(), 40);
 
     g.setColour(ACCENT);
-    g.fillRect(0, 38, getWidth(), 2);
+    g.fillRect(0, 58, getWidth(), 2);
 
-    g.setColour(TEXT_LIGHT);
-    g.setFont(juce::Font(20.0f, juce::Font::bold));
-    g.drawText("BITMORPH", 16, 0, 200, 40, juce::Justification::centredLeft);
+    g.setColour (TEXT_LIGHT);
+    g.setFont (juce::Font (20.0f, juce::Font::bold));
+    g.drawText ("BITMORPH", 16, 0, 200, 60, juce::Justification::centredLeft);
 
-    g.setColour(TEXT_MUTED);
-    g.setFont(9.5f);
-    g.drawText("evrshade 2026", 0, 0, getWidth() - 16, 40,
-        juce::Justification::centredRight);
+    g.setColour (TEXT_MUTED);
+    g.setFont (9.5f);
+    g.drawText ("evrshade 2026", 0, 0, getWidth() - 16, 60,
+                juce::Justification::centredRight);
+
+    // Preset bar background
+    g.setColour (juce::Colour (0xff12121f));
+    g.fillRect (0, 40, getWidth(), 20);
 }
 
 void BitMorphAudioProcessorEditor::resized()
 {
     const int W = getWidth();
     const int GAP = 4;
-    const int HEADERH = 40;
+    const int HEADERH = 60;
+
+    // Preset bar
+    int pbY = 40;
+    int pbH = 20;
+    int btnW = 44;
+    presetPrevBtn.setBounds(4, pbY, 24, pbH);
+    presetNextBtn.setBounds(30, pbY, 24, pbH);
+    presetNameBtn.setBounds(58, pbY, W - 58 - (btnW * 4) - 12, pbH);
+    presetRandBtn.setBounds(W - (btnW * 4) - 8, pbY, btnW, pbH);
+    presetRandParamBtn.setBounds(W - (btnW * 3) - 6, pbY, btnW, pbH);
+    presetSaveBtn.setBounds(W - (btnW * 2) - 4, pbY, btnW, pbH);
+    presetLoadBtn.setBounds(W - btnW - 2, pbY, btnW, pbH);
+
     const int MASTERH = 130;
     const int ROWH = (getHeight() - HEADERH - MASTERH - GAP * 3) / 2;
 

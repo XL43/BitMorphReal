@@ -138,6 +138,182 @@ private:
     SectionPanel stepSeqPanel{ "STEP SEQ" };
     SectionPanel masterPanel{ "MASTER" };
 
+    // ── Preset bar ────────────────────────────────────────────────────────────────
+    juce::TextButton presetPrevBtn{ "<" };
+    juce::TextButton presetNextBtn{ ">" };
+    juce::TextButton presetSaveBtn{ "Save" };
+    juce::TextButton presetLoadBtn{ "Load" };
+    juce::TextButton presetRandBtn{ "?" };
+    juce::TextButton presetRandParamBtn{ "~" };
+    juce::TextButton presetNameBtn;
+    int              currentPresetIndex = -1;
+
+    struct PresetEntry
+    {
+        juce::String name;
+        juce::String folderName; // empty = root
+        juce::File   file;
+    };
+
+    juce::Array<PresetEntry> allPresets;
+
+    juce::File getPresetsFolder() const
+    {
+        return juce::File("C:\\Users\\lickm\\OneDrive\\Documents\\JUCE Projects\\BitMorph\\Presets");
+    }
+
+    void refreshPresetList()
+    {
+        allPresets.clear();
+        auto root = getPresetsFolder();
+        if (!root.exists()) return;
+
+        // Root level presets
+        for (auto& f : root.findChildFiles(juce::File::findFiles, false, "*.xml"))
+            allPresets.add({ f.getFileNameWithoutExtension(), "", f });
+
+        // One level of subfolders
+        for (auto& dir : root.findChildFiles(juce::File::findDirectories, false, "*"))
+        {
+            for (auto& f : dir.findChildFiles(juce::File::findFiles, false, "*.xml"))
+                allPresets.add({ f.getFileNameWithoutExtension(), dir.getFileName(), f });
+        }
+
+        updatePresetLabel();
+    }
+
+    void updatePresetLabel()
+    {
+        if (allPresets.isEmpty())
+            presetNameBtn.setButtonText("-- No Presets --");
+        else if (currentPresetIndex >= 0 && currentPresetIndex < allPresets.size())
+        {
+            auto& e = allPresets[currentPresetIndex];
+            juce::String display = e.folderName.isEmpty()
+                ? e.name
+                : e.folderName + " / " + e.name;
+            presetNameBtn.setButtonText(display);
+        }
+        else
+            presetNameBtn.setButtonText("-- Init --");
+    }
+
+    void loadPresetByIndex(int index)
+    {
+        if (index < 0 || index >= allPresets.size()) return;
+        auto& entry = allPresets[index];
+        if (!entry.file.existsAsFile()) return;
+        juce::MemoryBlock data;
+        entry.file.loadFileAsData(data);
+        audioProcessor.setStateInformation(data.getData(), (int)data.getSize());
+        currentPresetIndex = index;
+        updatePresetLabel();
+    }
+
+    void savePreset()
+    {
+        auto folder = getPresetsFolder();
+        folder.createDirectory();
+
+        auto chooser = std::make_shared<juce::FileChooser>(
+            "Save Preset", folder, "*.xml");
+
+        chooser->launchAsync(juce::FileBrowserComponent::saveMode |
+            juce::FileBrowserComponent::canSelectFiles,
+            [this, chooser](const juce::FileChooser& fc)
+            {
+                auto result = fc.getResult();
+                if (result == juce::File{}) return;
+                auto file = result.withFileExtension("xml");
+                juce::MemoryBlock data;
+                audioProcessor.getStateInformation(data);
+                file.replaceWithData(data.getData(), data.getSize());
+                refreshPresetList();
+                for (int i = 0; i < allPresets.size(); ++i)
+                {
+                    if (allPresets[i].file == file)
+                    {
+                        currentPresetIndex = i;
+                        break;
+                    }
+                }
+                updatePresetLabel();
+            });
+    }
+
+    void randomPreset()
+    {
+        if (allPresets.isEmpty()) return;
+        juce::Random rng;
+        loadPresetByIndex(rng.nextInt(allPresets.size()));
+    }
+
+    void randomizeParameters()
+    {
+        juce::Random rng;
+        for (auto* param : audioProcessor.apvts.processor.getParameters())
+        {
+            param->beginChangeGesture();
+            param->setValueNotifyingHost(rng.nextFloat());
+            param->endChangeGesture();
+        }
+        currentPresetIndex = -1;
+        presetNameBtn.setButtonText("-- Randomized --");
+    }
+
+    void showPresetMenu()
+    {
+        if (allPresets.isEmpty()) return;
+
+        juce::PopupMenu menu;
+
+        // Collect unique folder names preserving order
+        juce::StringArray folders;
+        folders.add(""); // root first
+        for (auto& e : allPresets)
+            if (e.folderName.isNotEmpty() && !folders.contains(e.folderName))
+                folders.add(e.folderName);
+
+        int itemID = 1;
+
+        for (auto& folder : folders)
+        {
+            if (folder.isEmpty())
+            {
+                // Root presets go directly into menu
+                for (int i = 0; i < allPresets.size(); ++i)
+                {
+                    if (allPresets[i].folderName.isEmpty())
+                    {
+                        bool isCurrent = (i == currentPresetIndex);
+                        menu.addItem(itemID + i, allPresets[i].name, true, isCurrent);
+                    }
+                }
+            }
+            else
+            {
+                juce::PopupMenu sub;
+                for (int i = 0; i < allPresets.size(); ++i)
+                {
+                    if (allPresets[i].folderName == folder)
+                    {
+                        bool isCurrent = (i == currentPresetIndex);
+                        sub.addItem(itemID + i, allPresets[i].name, true, isCurrent);
+                    }
+                }
+                menu.addSubMenu(folder, sub);
+            }
+        }
+
+        menu.showMenuAsync(juce::PopupMenu::Options()
+            .withTargetComponent(presetNameBtn),
+            [this](int result)
+            {
+                if (result <= 0) return;
+                loadPresetByIndex(result - 1);
+            });
+    }
+
     KnobSet            bitDepthKnob;
     KnobSet            ditheringKnob;
     juce::ToggleButton bitDepthOnBtn{ "Bit Depth On" };
