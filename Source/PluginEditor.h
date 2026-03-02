@@ -387,6 +387,9 @@ private:
     void showPresetMenu()
     {
         juce::PopupMenu menu;
+        menu.addItem(9000, "Initialize");
+        menu.addSeparator();
+
         juce::PopupMenu currentSub;
         juce::String    currentFolder;
         int             itemID = 1;
@@ -415,7 +418,8 @@ private:
         menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(presetNameBtn),
             [this](int result)
             {
-                if (result > 0) loadPresetByIndex(result - 1);
+                if (result == 9000) initializePreset();
+                else if (result > 0) loadPresetByIndex(result - 1);
             });
     }
 
@@ -458,6 +462,15 @@ private:
         }
         currentPresetIndex = -1;
         presetNameBtn.setButtonText("-- Randomized --");
+        if (stepSeqGrid != nullptr) stepSeqGrid->repaint();
+    }
+
+    void initializePreset()
+    {
+        for (auto* param : audioProcessor.apvts.processor.getParameters())
+            param->setValueNotifyingHost(param->getDefaultValue());
+        currentPresetIndex = -1;
+        presetNameBtn.setButtonText("-- Init --");
         if (stepSeqGrid != nullptr) stepSeqGrid->repaint();
     }
 
