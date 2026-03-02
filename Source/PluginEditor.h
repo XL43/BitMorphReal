@@ -342,6 +342,54 @@ private:
     juce::TextButton presetRandParamBtn{ "DIE" };
     juce::TextButton presetSaveBtn{ "Save" };
     juce::TextButton presetLoadBtn{ "Load" };
+    juce::TextButton presetStarBtn{ "STAR_OFF" };
+
+    juce::StringArray favorites;
+
+    juce::File getFavoritesFile()
+    {
+        return getPresetsFolder().getChildFile("favorites.txt");
+    }
+
+    void loadFavorites()
+    {
+        favorites.clear();
+        auto f = getFavoritesFile();
+        if (f.existsAsFile())
+            favorites.addTokens(f.loadFileAsString(), "\n", "");
+        favorites.removeEmptyStrings();
+    }
+
+    void saveFavorites()
+    {
+        getFavoritesFile().replaceWithText(favorites.joinIntoString("\n"));
+    }
+
+    bool isFavorite(const juce::String& name)
+    {
+        return favorites.contains(name);
+    }
+
+    void toggleFavorite()
+    {
+        if (currentPresetIndex < 0 || currentPresetIndex >= allPresets.size()) return;
+        auto name = allPresets[currentPresetIndex].name;
+        if (isFavorite(name))
+            favorites.removeString(name);
+        else
+            favorites.add(name);
+        saveFavorites();
+        updateStarBtn();
+    }
+
+    void updateStarBtn()
+    {
+        bool on = currentPresetIndex >= 0
+            && currentPresetIndex < allPresets.size()
+            && isFavorite(allPresets[currentPresetIndex].name);
+        presetStarBtn.setButtonText(on ? "STAR_ON" : "STAR_OFF");
+        presetStarBtn.repaint();
+    }
 
     juce::File getPresetsFolder()
     {
@@ -381,6 +429,8 @@ private:
         audioProcessor.setStateInformation(data.getData(), (int)data.getSize());
         currentPresetIndex = index;
         updatePresetLabel();
+        audioProcessor.apvts.state.setProperty("currentPresetName", entry.name, nullptr);
+        updateStarBtn();
         if (stepSeqGrid != nullptr) stepSeqGrid->repaint();
     }
 
@@ -454,12 +504,36 @@ private:
     void randomizeParameters()
     {
         juce::Random rng;
-        for (auto* param : audioProcessor.apvts.processor.getParameters())
+        auto& apvts = audioProcessor.apvts;
+
+        // Randomize all parameters freely
+        for (auto* param : apvts.processor.getParameters())
         {
             param->beginChangeGesture();
             param->setValueNotifyingHost(rng.nextFloat());
             param->endChangeGesture();
         }
+
+        // Override preamp: 0.0 to 5.0 dB
+        if (auto* preamp = dynamic_cast<juce::RangedAudioParameter*> (
+            apvts.getParameter("preampGain")))
+        {
+            float norm = preamp->convertTo0to1(rng.nextFloat() * 5.0f);
+            preamp->beginChangeGesture();
+            preamp->setValueNotifyingHost(norm);
+            preamp->endChangeGesture();
+        }
+
+        // Override output: -5.0 to 5.0 dB
+        if (auto* output = dynamic_cast<juce::RangedAudioParameter*> (
+            apvts.getParameter("outputVolume")))
+        {
+            float norm = output->convertTo0to1((rng.nextFloat() * 10.0f) - 5.0f);
+            output->beginChangeGesture();
+            output->setValueNotifyingHost(norm);
+            output->endChangeGesture();
+        }
+
         currentPresetIndex = -1;
         presetNameBtn.setButtonText("-- Randomized --");
         if (stepSeqGrid != nullptr) stepSeqGrid->repaint();
@@ -471,6 +545,8 @@ private:
             param->setValueNotifyingHost(param->getDefaultValue());
         currentPresetIndex = -1;
         presetNameBtn.setButtonText("-- Init --");
+        audioProcessor.apvts.state.setProperty("currentPresetName", "-- Init --", nullptr);
+        updateStarBtn();
         if (stepSeqGrid != nullptr) stepSeqGrid->repaint();
     }
 

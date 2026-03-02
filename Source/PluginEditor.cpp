@@ -123,6 +123,30 @@ void BitMorphLookAndFeel::drawButtonText(juce::Graphics& g,
         return;
     }
 
+    if (name == "STAR_ON" || name == "STAR_OFF")
+    {
+        bool on = (name == "STAR_ON");
+        float cx = b.getCentreX(), cy = b.getCentreY();
+        float r = juce::jmin(b.getWidth(), b.getHeight()) * 0.38f;
+        juce::Path star;
+        int pts = 5;
+        for (int i = 0; i < pts * 2; ++i)
+        {
+            float angle = juce::MathConstants<float>::pi * i / pts - juce::MathConstants<float>::pi / 2.0f;
+            float rad = (i % 2 == 0) ? r : r * 0.42f;
+            float px = cx + rad * std::cos(angle);
+            float py = cy + rad * std::sin(angle);
+            if (i == 0) star.startNewSubPath(px, py);
+            else        star.lineTo(px, py);
+        }
+        star.closeSubPath();
+        g.setColour(on ? juce::Colour(0xffffcc00) : col.withAlpha(0.5f));
+        if (on) g.fillPath(star);
+        g.setColour(on ? juce::Colour(0xffffcc00) : col.withAlpha(0.5f));
+        g.strokePath(star, juce::PathStrokeType(1.2f));
+        return;
+    }
+
     if (name == "SHUFFLE")
     {
         // Two crossed arrows
@@ -211,7 +235,12 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     styleBtn(presetPrevBtn, juce::Colour(0xff1a1a35), TEXT_LIGHT);
     styleBtn(presetNextBtn, juce::Colour(0xff1a1a35), TEXT_LIGHT);
     styleBtn(presetSaveBtn, ACCENT, TEXT_LIGHT);
-    styleBtn(presetLoadBtn, juce::Colour(0xff252538), TEXT_LIGHT);
+    styleBtn(presetStarBtn, juce::Colour(0xff1a1a35), TEXT_LIGHT);
+
+    addAndMakeVisible(presetStarBtn);
+    presetStarBtn.onClick = [this] { toggleFavorite(); };
+    updateStarBtn();
+
     styleBtn(presetRandBtn, juce::Colour(0xff252538), TEXT_LIGHT);
     styleBtn(presetRandParamBtn, juce::Colour(0xff252538), ACCENT);
     styleBtn(presetNameBtn, juce::Colour(0xff1a1a35), TEXT_LIGHT);
@@ -265,6 +294,14 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
         };
 
     refreshPresetList();
+    loadFavorites();
+
+    // Restore preset name from last session
+    auto savedName = audioProcessor.apvts.state
+        .getProperty("currentPresetName", "-- Init --").toString();
+    presetNameBtn.setButtonText(savedName);
+    for (int i = 0; i < allPresets.size(); ++i)
+        if (allPresets[i].name == savedName) { currentPresetIndex = i; break; }
 
     auto& apvts = audioProcessor.apvts;
 
@@ -430,11 +467,12 @@ void BitMorphAudioProcessorEditor::resized()
         int bw = 44;
         presetPrevBtn.setBounds(4, y, 22, h);
         presetNextBtn.setBounds(28, y, 22, h);
-        presetNameBtn.setBounds(52, y, W - 52 - bw * 4 - 10, h);
-        presetRandBtn.setBounds(W - bw * 4 - 6, y, bw, h);
-        presetRandParamBtn.setBounds(W - bw * 3 - 4, y, bw, h);
-        presetSaveBtn.setBounds(W - bw * 2 - 2, y, bw, h);
-        presetLoadBtn.setBounds(W - bw, y, bw, h);
+        presetNameBtn.setBounds(52, y, W - 52 - bw * 4 - 28, h);
+        presetStarBtn.setBounds(W - bw * 4 - 24, y, 20, h);
+        presetRandBtn.setBounds(W - bw * 4 - 2, y, bw, h);
+        presetRandParamBtn.setBounds(W - bw * 3, y, bw, h);
+        presetSaveBtn.setBounds(W - bw * 2 + 2, y, bw, h);
+        presetLoadBtn.setBounds(W - bw + 4, y, bw, h);
     }
 
     auto placeKnobAt = [](KnobSet& k, int x, int y, int w)
