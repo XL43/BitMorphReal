@@ -3,14 +3,14 @@
 #include "PluginProcessor.h"
 
 // ── Colours (shared between .h and .cpp) ─────────────────────────────────────
-static const juce::Colour BG_DARK(0xff0d0d1a);
-static const juce::Colour BG_PANEL(0xff141428);
-static const juce::Colour BG_HEADER(0xff1a1a35);
-static const juce::Colour ACCENT(0xffe94560);
-static const juce::Colour TEXT_LIGHT(0xffddddee);
-static const juce::Colour TEXT_MUTED(0xffaabbcc);
-static const juce::Colour KNOB_BODY(0xff252538);
-static const juce::Colour BORDER_CLR(0xff2a2a45);
+static const juce::Colour BG_DARK(0xff020202);
+static const juce::Colour BG_PANEL(0xff010101);
+static const juce::Colour BG_HEADER(0xff1c1c1c);
+static const juce::Colour ACCENT(0xffcc5500);
+static const juce::Colour TEXT_LIGHT(0xffeeddcc);
+static const juce::Colour TEXT_MUTED(0xff997766);
+static const juce::Colour KNOB_BODY(0xff222222);
+static const juce::Colour BORDER_CLR(0xff2e2e2e);
 
 // ── Custom LookAndFeel ────────────────────────────────────────────────────────
 class BitMorphLookAndFeel : public juce::LookAndFeel_V4
@@ -93,7 +93,7 @@ public:
         // Grey overlay when disabled
         if (showToggle && !toggleBtn.getToggleState())
         {
-            g.setColour(juce::Colour(0xaa080810));
+            g.setColour(juce::Colour(0xaa020202));
             g.fillRect(b);
         }
     }
@@ -138,10 +138,10 @@ public:
         const float midY = bounds.getCentreY();
         const float maxH = bounds.getHeight() * 0.5f - 2.0f;
 
-        g.setColour(juce::Colour(0xff0d0d1a));
+        g.setColour(juce::Colour(0xff010101));
         g.fillRoundedRectangle(bounds, 3.0f);
 
-        g.setColour(juce::Colour(0xff2a2a45));
+        g.setColour(juce::Colour(0xff2e2e2e));
         g.fillRect(bounds.getX(), midY - 0.5f, bounds.getWidth(), 1.0f);
 
         for (int i = 0; i < numSteps; ++i)
@@ -157,16 +157,16 @@ public:
 
             bool isCurrent = (i == currentStep);
 
-            g.setColour(isCurrent ? juce::Colour(0xff1e1e38)
-                : juce::Colour(0xff12121f));
+            g.setColour(isCurrent ? juce::Colour(0xff1c1c1c)
+                : juce::Colour(0xff010101));
             g.fillRect(barX, bounds.getY() + 1.0f, barW, bounds.getHeight() - 2.0f);
 
             if (std::abs(val) > 0.01f)
             {
                 juce::Colour barColour = isCurrent
-                    ? juce::Colour(0xffff6680)
-                    : (val >= 0.0f ? juce::Colour(0xffe94560)
-                        : juce::Colour(0xff8b1a2e));
+                    ? juce::Colour(0xffff8c00)
+                    : (val >= 0.0f ? juce::Colour(0xffcc5500)
+                        : juce::Colour(0xff7a2e00));
                 g.setColour(barColour);
                 g.fillRect(barX + 1.0f, barY, barW - 2.0f, barH);
             }
@@ -181,14 +181,14 @@ public:
             }
 
             g.setColour(isCurrent ? juce::Colours::white
-                : juce::Colour(0xff444466));
+                : juce::Colour(0xffde7a00));
             g.setFont(8.0f);
             g.drawText(juce::String(i + 1),
                 (int)barX, (int)(bounds.getBottom() - 12),
                 (int)barW, 12, juce::Justification::centred);
         }
 
-        g.setColour(juce::Colour(0xff2a2a45));
+        g.setColour(juce::Colour(0xff2e2e2e));
         g.drawRoundedRectangle(bounds.reduced(0.5f), 3.0f, 1.0f);
     }
 
