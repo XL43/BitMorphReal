@@ -2,14 +2,15 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 
-// ── Colours (shared between .h and .cpp) ─────────────────────────────────────
+// ── Colour palette  (black / orange industrial) ───────────────────────────────
 static const juce::Colour BG_DARK(0xff020202);
-static const juce::Colour BG_PANEL(0xff010101);
-static const juce::Colour BG_HEADER(0xff1c1c1c);
-static const juce::Colour ACCENT(0xffcc5500);
-static const juce::Colour TEXT_LIGHT(0xffeeddcc);
-static const juce::Colour TEXT_MUTED(0xff997766);
-static const juce::Colour KNOB_BODY(0xff222222);
+static const juce::Colour BG_PANEL(0xff0d0d0d);
+static const juce::Colour BG_HEADER(0xff141414);
+static const juce::Colour ACCENT(0xffcc5500);   // orange
+static const juce::Colour ACCENT2(0xffdd2200);   // red (danger / active)
+static const juce::Colour TEXT_LIGHT(0xffeeeeee);
+static const juce::Colour TEXT_MUTED(0xff888888);
+static const juce::Colour KNOB_BODY(0xff1c1c1c);
 static const juce::Colour BORDER_CLR(0xff2e2e2e);
 
 // ── Custom LookAndFeel ────────────────────────────────────────────────────────
@@ -17,11 +18,15 @@ class BitMorphLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
     BitMorphLookAndFeel();
+
     void drawRotarySlider(juce::Graphics&, int x, int y, int width, int height,
         float sliderPos, float startAngle, float endAngle,
         juce::Slider&) override;
+
     void drawToggleButton(juce::Graphics&, juce::ToggleButton&,
         bool highlighted, bool down) override;
+
+    // Icon buttons: name the button "dice", "xarr", or "star" to get custom drawing
     void drawButtonText(juce::Graphics&, juce::TextButton&,
         bool highlighted, bool down) override;
 };
@@ -45,10 +50,8 @@ public:
     void paint(juce::Graphics& g) override
     {
         auto b = getLocalBounds();
-
         g.setColour(BG_PANEL);
         g.fillRoundedRectangle(b.toFloat(), 4.0f);
-
         g.setColour(BORDER_CLR);
         g.drawRoundedRectangle(b.toFloat().reduced(0.5f), 4.0f, 1.0f);
 
@@ -57,25 +60,15 @@ public:
         g.fillRect(header);
 
         bool enabled = !showToggle || toggleBtn.getToggleState();
-
-        g.setColour(enabled ? ACCENT : juce::Colour(0xff333344));
+        g.setColour(enabled ? ACCENT : juce::Colour(0xff2a2a2a));
         g.fillRect(header.getX(), header.getBottom() - 1, header.getWidth(), 1);
 
-        // LED dot
         if (showToggle)
         {
             float dotX = (float)header.getX() + 8.0f;
             float dotY = (float)header.getCentreY() - 5.0f;
-            if (enabled)
-            {
-                g.setColour(ACCENT.withAlpha(0.25f));
-                g.fillEllipse(dotX - 3, dotY - 3, 16, 16);
-                g.setColour(ACCENT);
-            }
-            else
-            {
-                g.setColour(juce::Colour(0xff2a2a3a));
-            }
+            if (enabled) { g.setColour(ACCENT.withAlpha(0.3f)); g.fillEllipse(dotX - 3, dotY - 3, 16, 16); g.setColour(ACCENT); }
+            else           g.setColour(juce::Colour(0xff252525));
             g.fillEllipse(dotX, dotY, 10, 10);
             g.setColour(BORDER_CLR);
             g.drawEllipse(dotX, dotY, 10, 10, 1.0f);
@@ -86,23 +79,17 @@ public:
         int textX = showToggle ? header.getX() + 24 : header.getX() + 6;
         g.drawText(sectionTitle,
             juce::Rectangle<int>(textX, header.getY(),
-                header.getWidth() - textX - 4,
-                header.getHeight()),
+                header.getWidth() - textX - 4, header.getHeight()),
             juce::Justification::centredLeft);
 
-        // Grey overlay when disabled
         if (showToggle && !toggleBtn.getToggleState())
         {
-            g.setColour(juce::Colour(0xaa020202));
+            g.setColour(juce::Colour(0xaa010101));
             g.fillRect(b);
         }
     }
 
-    void resized() override
-    {
-        if (showToggle)
-            toggleBtn.setBounds(0, 0, 22, 22);
-    }
+    void resized() override { if (showToggle) toggleBtn.setBounds(0, 0, 22, 22); }
 
     juce::ToggleButton toggleBtn;
 
@@ -115,20 +102,11 @@ private:
 class StepSequencerGrid : public juce::Component
 {
 public:
-    StepSequencerGrid(juce::AudioProcessorValueTreeState& a)
-        : apvts(a) {
-    }
-
+    StepSequencerGrid(juce::AudioProcessorValueTreeState& a) : apvts(a) {}
     ~StepSequencerGrid() override {}
 
-    void setCurrentStep(int step)
-    {
-        if (step != currentStep)
-        {
-            currentStep = step;
-            repaint();
-        }
-    }
+    void setCurrentStep(int step) { if (step != currentStep) { currentStep = step; repaint(); } }
+    void setActiveBank(int bank) { if (bank != activeBank) { activeBank = bank;  repaint(); } }
 
     void paint(juce::Graphics& g) override
     {
@@ -138,15 +116,16 @@ public:
         const float midY = bounds.getCentreY();
         const float maxH = bounds.getHeight() * 0.5f - 2.0f;
 
-        g.setColour(juce::Colour(0xff010101));
+        g.setColour(BG_DARK);
         g.fillRoundedRectangle(bounds, 3.0f);
-
-        g.setColour(juce::Colour(0xff2e2e2e));
+        g.setColour(BORDER_CLR);
         g.fillRect(bounds.getX(), midY - 0.5f, bounds.getWidth(), 1.0f);
+
+        juce::String prefix = stepPrefixForBank(activeBank);
 
         for (int i = 0; i < numSteps; ++i)
         {
-            auto  stepID = juce::String("stepSeqStep") + juce::String(i);
+            auto  stepID = prefix + juce::String(i);
             auto* raw = apvts.getRawParameterValue(stepID);
             float val = (raw != nullptr) ? raw->load() : 0.0f;
 
@@ -156,39 +135,31 @@ public:
             float barY = (val >= 0.0f) ? midY - barH : midY;
 
             bool isCurrent = (i == currentStep);
-
-            g.setColour(isCurrent ? juce::Colour(0xff1c1c1c)
-                : juce::Colour(0xff010101));
+            g.setColour(isCurrent ? juce::Colour(0xff1a1000) : juce::Colour(0xff0a0a0a));
             g.fillRect(barX, bounds.getY() + 1.0f, barW, bounds.getHeight() - 2.0f);
 
             if (std::abs(val) > 0.01f)
             {
-                juce::Colour barColour = isCurrent
-                    ? juce::Colour(0xffff8c00)
-                    : (val >= 0.0f ? juce::Colour(0xffcc5500)
-                        : juce::Colour(0xff7a2e00));
-                g.setColour(barColour);
+                g.setColour(isCurrent ? ACCENT.brighter(0.4f)
+                    : (val >= 0.0f ? ACCENT : ACCENT2));
                 g.fillRect(barX + 1.0f, barY, barW - 2.0f, barH);
             }
 
-            // Current step highlight
             if (isCurrent)
             {
-                g.setColour(juce::Colours::white.withAlpha(0.15f));
+                g.setColour(ACCENT.withAlpha(0.15f));
                 g.fillRect(barX, bounds.getY() + 1.0f, barW, bounds.getHeight() - 2.0f);
-                g.setColour(juce::Colours::white.withAlpha(0.6f));
+                g.setColour(ACCENT.withAlpha(0.8f));
                 g.fillRect(barX, bounds.getY() + 1.0f, barW, 2.0f);
             }
 
-            g.setColour(isCurrent ? juce::Colours::white
-                : juce::Colour(0xffde7a00));
+            g.setColour(isCurrent ? ACCENT : juce::Colour(0xff333333));
             g.setFont(8.0f);
-            g.drawText(juce::String(i + 1),
-                (int)barX, (int)(bounds.getBottom() - 12),
+            g.drawText(juce::String(i + 1), (int)barX, (int)(bounds.getBottom() - 12),
                 (int)barW, 12, juce::Justification::centred);
         }
 
-        g.setColour(juce::Colour(0xff2e2e2e));
+        g.setColour(BORDER_CLR);
         g.drawRoundedRectangle(bounds.reduced(0.5f), 3.0f, 1.0f);
     }
 
@@ -198,14 +169,10 @@ public:
 private:
     void setStepFromMouse(const juce::MouseEvent& e)
     {
-        const int   numSteps = 16;
-        const float stepW = getWidth() / (float)numSteps;
-        int idx = juce::jlimit(0, numSteps - 1, (int)(e.position.x / stepW));
-
-        float val = 1.0f - (e.position.y / getHeight()) * 2.0f;
-        val = juce::jlimit(-1.0f, 1.0f, val);
-
-        auto stepID = juce::String("stepSeqStep") + juce::String(idx);
+        const float stepW = getWidth() / 16.0f;
+        int idx = juce::jlimit(0, 15, (int)(e.position.x / stepW));
+        float val = juce::jlimit(-1.0f, 1.0f, 1.0f - (e.position.y / getHeight()) * 2.0f);
+        auto stepID = stepPrefixForBank(activeBank) + juce::String(idx);
         if (auto* param = apvts.getParameter(stepID))
         {
             param->beginChangeGesture();
@@ -217,6 +184,7 @@ private:
 
     juce::AudioProcessorValueTreeState& apvts;
     int currentStep = -1;
+    int activeBank = 0;
 };
 
 // ── Main editor ───────────────────────────────────────────────────────────────
@@ -237,8 +205,12 @@ public:
 
     void timerCallback() override
     {
-        if (stepSeqGrid != nullptr)
-            stepSeqGrid->setCurrentStep(audioProcessor.getCurrentStepSeqStep());
+        if (stepSeqGrid == nullptr) return;
+        stepSeqGrid->setCurrentStep(audioProcessor.getCurrentStepSeqStep());
+        int bank = static_cast<int> (
+            audioProcessor.apvts.getRawParameterValue(ParamID::STEP_SEQ_BANK)->load());
+        stepSeqGrid->setActiveBank(bank);
+        updateBankButtons(bank);
     }
 
 private:
@@ -248,23 +220,24 @@ private:
     // ── Knob + label pair ─────────────────────────────────────────────────────
     struct KnobSet
     {
-        juce::Slider knob{ juce::Slider::RotaryVerticalDrag,
-                            juce::Slider::TextBoxBelow };
+        juce::Slider knob{ juce::Slider::RotaryVerticalDrag, juce::Slider::TextBoxBelow };
         juce::Label  label;
     };
 
     void setupKnob(KnobSet&, const juce::String& labelText);
-    void placeKnob(KnobSet&, juce::Rectangle<int> bounds);
+    void placeKnobAt(KnobSet&, int x, int y, int w);
     void setupCombo(juce::ComboBox&, juce::Label&,
         const juce::String& labelText,
         const juce::StringArray& items);
 
     // ── Section panels ────────────────────────────────────────────────────────
     SectionPanel quantizerPanel{ "QUANTIZER",   true };
+    SectionPanel drivePanel{ "DRIVE",       true };
     SectionPanel resamplerPanel{ "RESAMPLER",   true };
     SectionPanel filterPanel{ "FILTER",      false };
     SectionPanel waveCrushPanel{ "WAVECRUSHER", true };
     SectionPanel ringModPanel{ "RING MOD",    true };
+    SectionPanel noisePanel{ "NOISE",       true };
     SectionPanel lfoPanel{ "LFO",         false };
     SectionPanel stepSeqPanel{ "STEP SEQ",    true };
     SectionPanel masterPanel{ "MASTER",      false };
@@ -272,14 +245,20 @@ private:
     // ── Quantizer ─────────────────────────────────────────────────────────────
     KnobSet            bitDepthKnob;
     KnobSet            ditheringKnob;
-    juce::ToggleButton bitDepthOnBtn{ "Bit Depth On" };
     juce::ToggleButton dcShiftBtn{ "DC Shift" };
+
+    // ── Drive ─────────────────────────────────────────────────────────────────
+    KnobSet        driveAmountKnob;
+    KnobSet        driveBiasKnob;
+    KnobSet        driveMixKnob;
+    juce::ComboBox driveModeCombo;
+    juce::Label    driveModeLabel{ {}, "Mode" };
 
     // ── Resampler ─────────────────────────────────────────────────────────────
     KnobSet            resampleFreqKnob;
     KnobSet            approxDeviationKnob;
     KnobSet            imagesShiftKnob;
-    juce::ToggleButton resampleOnBtn{ "Resample On" };
+    KnobSet            jitterKnob;
     juce::ToggleButton approxOnBtn{ "Approx Filter" };
     juce::ToggleButton imagesOnBtn{ "Images Filter" };
 
@@ -292,15 +271,19 @@ private:
     juce::Label    filterOrderLabel{ {}, "Order" };
 
     // ── WaveCrusher ───────────────────────────────────────────────────────────
-    KnobSet            waveCrushAmountKnob;
-    juce::ToggleButton waveCrushOnBtn{ "WaveCrusher On" };
-    juce::ComboBox     waveCrushModeCombo;
-    juce::Label        waveCrushModeLabel{ {}, "Mode" };
+    KnobSet        waveCrushAmountKnob;
+    juce::ComboBox waveCrushModeCombo;
+    juce::Label    waveCrushModeLabel{ {}, "Mode" };
 
     // ── Ring Mod ──────────────────────────────────────────────────────────────
-    KnobSet            ringModFreqKnob;
-    KnobSet            ringModMixKnob;
-    juce::ToggleButton ringModOnBtn{ "Ring Mod On" };
+    KnobSet ringModFreqKnob;
+    KnobSet ringModMixKnob;
+
+    // ── Noise ─────────────────────────────────────────────────────────────────
+    KnobSet        noiseAmountKnob;
+    KnobSet        noiseColourKnob;
+    juce::ComboBox noiseTypeCombo;
+    juce::Label    noiseTypeLabel{ {}, "Type" };
 
     // ── LFO ───────────────────────────────────────────────────────────────────
     KnobSet        lfoRateKnob;
@@ -313,10 +296,19 @@ private:
     // ── Step Sequencer ────────────────────────────────────────────────────────
     KnobSet            stepSeqRateKnob;
     KnobSet            stepSeqDepthKnob;
-    juce::ToggleButton stepSeqOnBtn{ "Step Seq On" };
+    KnobSet            stepSeqSwingKnob;
     juce::ComboBox     stepSeqTargetCombo;
+    juce::ComboBox     stepSeqDirCombo;
     juce::Label        stepSeqTargetLabel{ {}, "Target" };
-    juce::TextButton   stepSeqRandBtn{ "DIE" };
+    juce::Label        stepSeqDirLabel{ {}, "Dir" };
+    juce::Slider       stepSeqLenSlider{ juce::Slider::LinearHorizontal,
+                                            juce::Slider::TextBoxRight };
+    juce::Label        stepSeqLenLabel{ {}, "Steps" };
+    juce::TextButton   bankBtn1{ "1" };
+    juce::TextButton   bankBtn2{ "2" };
+    juce::TextButton   bankBtn3{ "3" };
+    juce::TextButton   bankBtn4{ "4" };
+    juce::TextButton   randStepBtn{ "rand" };   // randomize step seq
     std::unique_ptr<StepSequencerGrid> stepSeqGrid;
 
     // ── Master ────────────────────────────────────────────────────────────────
@@ -325,26 +317,30 @@ private:
     KnobSet outputVolumeKnob;
 
     // ── Preset system ─────────────────────────────────────────────────────────
-    struct PresetEntry
-    {
-        juce::String name;
-        juce::String folderName;
-        juce::File   file;
-    };
+    struct PresetEntry { juce::String name, folderName; juce::File file; };
 
     juce::Array<PresetEntry> allPresets;
+    juce::StringArray        favorites;      // stores file paths of favourited presets
     int currentPresetIndex = -1;
 
+    // Preset bar buttons
+    // "dice" name → dice icon drawn in drawButtonText
+    // "xarr" name → crossed arrows icon
+    // "star" name → star icon (favourite toggle)
     juce::TextButton presetPrevBtn{ "<" };
     juce::TextButton presetNextBtn{ ">" };
     juce::TextButton presetNameBtn{ "-- Init --" };
-    juce::TextButton presetRandBtn{ "SHUFFLE" };
-    juce::TextButton presetRandParamBtn{ "DIE" };
+    juce::TextButton presetFaveBtn{ "*" };   // name = "star"
+    juce::TextButton presetRandBtn{ "?" };   // name = "dice"
+    juce::TextButton presetRandParamBtn{ "~" };   // name = "xarr"
     juce::TextButton presetSaveBtn{ "Save" };
     juce::TextButton presetLoadBtn{ "Load" };
-    juce::TextButton presetStarBtn{ "STAR_OFF" };
 
-    juce::StringArray favorites;
+    juce::File getPresetsFolder()
+    {
+        return juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+            .getChildFile("JUCE Projects/BitMorph/Presets");
+    }
 
     juce::File getFavoritesFile()
     {
@@ -365,36 +361,32 @@ private:
         getFavoritesFile().replaceWithText(favorites.joinIntoString("\n"));
     }
 
-    bool isFavorite(const juce::String& name)
+    bool isCurrentFavorite()
     {
-        return favorites.contains(name);
+        if (currentPresetIndex < 0 || currentPresetIndex >= allPresets.size()) return false;
+        return favorites.contains(allPresets[currentPresetIndex].file.getFullPathName());
     }
 
     void toggleFavorite()
     {
         if (currentPresetIndex < 0 || currentPresetIndex >= allPresets.size()) return;
-        auto name = allPresets[currentPresetIndex].name;
-        if (isFavorite(name))
-            favorites.removeString(name);
+        auto path = allPresets[currentPresetIndex].file.getFullPathName();
+        if (favorites.contains(path))
+            favorites.removeString(path);
         else
-            favorites.add(name);
+            favorites.add(path);
         saveFavorites();
-        updateStarBtn();
+        updateFaveButton();
     }
 
-    void updateStarBtn()
+    void updateFaveButton()
     {
-        bool on = currentPresetIndex >= 0
-            && currentPresetIndex < allPresets.size()
-            && isFavorite(allPresets[currentPresetIndex].name);
-        presetStarBtn.setButtonText(on ? "STAR_ON" : "STAR_OFF");
-        presetStarBtn.repaint();
-    }
-
-    juce::File getPresetsFolder()
-    {
-        return juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
-            .getChildFile("JUCE Projects/BitMorph/Presets");
+        bool faved = isCurrentFavorite();
+        presetFaveBtn.setColour(juce::TextButton::buttonColourId,
+            faved ? ACCENT : juce::Colour(0xff1a1a1a));
+        presetFaveBtn.setColour(juce::TextButton::textColourOffId,
+            faved ? TEXT_LIGHT : TEXT_MUTED);
+        presetFaveBtn.repaint();
     }
 
     void refreshPresetList()
@@ -402,12 +394,8 @@ private:
         allPresets.clear();
         auto root = getPresetsFolder();
         if (!root.isDirectory()) return;
-
-        // Root presets
         for (auto& f : root.findChildFiles(juce::File::findFiles, false, "*.xml"))
             allPresets.add({ f.getFileNameWithoutExtension(), {}, f });
-
-        // One level of subfolders
         for (auto& folder : root.findChildFiles(juce::File::findDirectories, false))
             for (auto& f : folder.findChildFiles(juce::File::findFiles, false, "*.xml"))
                 allPresets.add({ f.getFileNameWithoutExtension(), folder.getFileName(), f });
@@ -417,6 +405,7 @@ private:
     {
         if (currentPresetIndex >= 0 && currentPresetIndex < allPresets.size())
             presetNameBtn.setButtonText(allPresets[currentPresetIndex].name);
+        updateFaveButton();
     }
 
     void loadPresetByIndex(int index)
@@ -429,54 +418,99 @@ private:
         audioProcessor.setStateInformation(data.getData(), (int)data.getSize());
         currentPresetIndex = index;
         updatePresetLabel();
-        audioProcessor.apvts.state.setProperty("currentPresetName", entry.name, nullptr);
-        updateStarBtn();
+        if (stepSeqGrid != nullptr) stepSeqGrid->repaint();
+    }
+
+    void initializePreset()
+    {
+        // Reset every parameter to its default value
+        for (auto* param : audioProcessor.apvts.processor.getParameters())
+        {
+            param->beginChangeGesture();
+            param->setValueNotifyingHost(param->getDefaultValue());
+            param->endChangeGesture();
+        }
+        currentPresetIndex = -1;
+        presetNameBtn.setButtonText("-- Init --");
+        updateFaveButton();
         if (stepSeqGrid != nullptr) stepSeqGrid->repaint();
     }
 
     void showPresetMenu()
     {
-        juce::PopupMenu menu;
-        menu.addItem(9000, "Initialize");
+        juce::PopupMenu menu, currentSub;
+        juce::String    currentFolder;
+        int             itemID = 2;   // 1 reserved for Init
+
+        // Init option always at top
+        menu.addItem(1, "-- Initialize --");
         menu.addSeparator();
 
-        juce::PopupMenu currentSub;
-        juce::String    currentFolder;
-        int             itemID = 1;
-
-        for (auto& p : allPresets)
+        // Favourites submenu
+        if (favorites.size() > 0)
         {
-            if (p.folderName.isEmpty())
-            {
-                menu.addItem(itemID++, p.name);
-            }
+            juce::PopupMenu favMenu;
+            for (auto& p : allPresets)
+                if (favorites.contains(p.file.getFullPathName()))
+                    favMenu.addItem(itemID++, p.name);
+            menu.addSubMenu("Favorites", favMenu);
+            menu.addSeparator();
+        }
+
+        for (auto& pr : allPresets)
+        {
+            if (pr.folderName.isEmpty()) { menu.addItem(itemID++, pr.name); }
             else
             {
-                if (p.folderName != currentFolder)
+                if (pr.folderName != currentFolder)
                 {
-                    if (currentFolder.isNotEmpty())
-                        menu.addSubMenu(currentFolder, currentSub);
-                    currentSub = juce::PopupMenu();
-                    currentFolder = p.folderName;
+                    if (currentFolder.isNotEmpty()) menu.addSubMenu(currentFolder, currentSub);
+                    currentSub = juce::PopupMenu(); currentFolder = pr.folderName;
                 }
-                currentSub.addItem(itemID++, p.name);
+                currentSub.addItem(itemID++, pr.name);
             }
         }
-        if (currentFolder.isNotEmpty())
-            menu.addSubMenu(currentFolder, currentSub);
+        if (currentFolder.isNotEmpty()) menu.addSubMenu(currentFolder, currentSub);
 
         menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(presetNameBtn),
-            [this](int result)
+            [this](int r)
             {
-                if (result == 9000) initializePreset();
-                else if (result > 0) loadPresetByIndex(result - 1);
+                if (r == 1) { initializePreset(); return; }
+                if (r >= 2)
+                {
+                    // Map back: first count favs to skip them in the main list
+                    int favCount = 0;
+                    if (favorites.size() > 0)
+                        for (auto& p : allPresets)
+                            if (favorites.contains(p.file.getFullPathName())) ++favCount;
+
+                    // r=2 starts the fav entries, then after favCount comes main list
+                    int favStart = 2;
+                    int mainStart = favStart + favCount;
+
+                    if (favorites.size() > 0 && r >= favStart && r < mainStart)
+                    {
+                        // It's a favourite — find which one
+                        int favIdx = r - favStart;
+                        int count = 0;
+                        for (int i = 0; i < allPresets.size(); ++i)
+                            if (favorites.contains(allPresets[i].file.getFullPathName()))
+                            {
+                                if (count == favIdx) { loadPresetByIndex(i); return; }
+                                ++count;
+                            }
+                    }
+                    else
+                    {
+                        loadPresetByIndex(r - mainStart);
+                    }
+                }
             });
     }
 
     void savePreset()
     {
-        auto chooser = std::make_shared<juce::FileChooser>(
-            "Save Preset", getPresetsFolder(), "*.xml");
+        auto chooser = std::make_shared<juce::FileChooser>("Save Preset", getPresetsFolder(), "*.xml");
         chooser->launchAsync(juce::FileBrowserComponent::saveMode |
             juce::FileBrowserComponent::canSelectFiles,
             [this, chooser](const juce::FileChooser& fc)
@@ -497,81 +531,107 @@ private:
     void randomPreset()
     {
         if (allPresets.isEmpty()) return;
-        int idx = juce::Random::getSystemRandom().nextInt(allPresets.size());
-        loadPresetByIndex(idx);
+        loadPresetByIndex(juce::Random::getSystemRandom().nextInt(allPresets.size()));
     }
 
     void randomizeParameters()
     {
         juce::Random rng;
-        auto& apvts = audioProcessor.apvts;
-
-        // Randomize all parameters freely
-        for (auto* param : apvts.processor.getParameters())
+        for (auto* param : audioProcessor.apvts.processor.getParameters())
         {
             param->beginChangeGesture();
             param->setValueNotifyingHost(rng.nextFloat());
             param->endChangeGesture();
         }
-
-        // Override preamp: 0.0 to 5.0 dB
-        if (auto* preamp = dynamic_cast<juce::RangedAudioParameter*> (
-            apvts.getParameter("preampGain")))
-        {
-            float norm = preamp->convertTo0to1(rng.nextFloat() * 5.0f);
-            preamp->beginChangeGesture();
-            preamp->setValueNotifyingHost(norm);
-            preamp->endChangeGesture();
-        }
-
-        // Override output: -5.0 to 5.0 dB
-        if (auto* output = dynamic_cast<juce::RangedAudioParameter*> (
-            apvts.getParameter("outputVolume")))
-        {
-            float norm = output->convertTo0to1((rng.nextFloat() * 10.0f) - 5.0f);
-            output->beginChangeGesture();
-            output->setValueNotifyingHost(norm);
-            output->endChangeGesture();
-        }
-
         currentPresetIndex = -1;
         presetNameBtn.setButtonText("-- Randomized --");
+        updateFaveButton();
         if (stepSeqGrid != nullptr) stepSeqGrid->repaint();
     }
 
-    void initializePreset()
+    void randomizeStepSeq()
     {
-        for (auto* param : audioProcessor.apvts.processor.getParameters())
-            param->setValueNotifyingHost(param->getDefaultValue());
-        currentPresetIndex = -1;
-        presetNameBtn.setButtonText("-- Init --");
-        audioProcessor.apvts.state.setProperty("currentPresetName", "-- Init --", nullptr);
-        updateStarBtn();
+        juce::Random rng;
+        int bank = static_cast<int> (
+            audioProcessor.apvts.getRawParameterValue(ParamID::STEP_SEQ_BANK)->load());
+        auto prefix = stepPrefixForBank(bank);
+        for (int i = 0; i < 16; ++i)
+        {
+            auto stepID = prefix + juce::String(i);
+            if (auto* param = audioProcessor.apvts.getParameter(stepID))
+            {
+                param->beginChangeGesture();
+                // Random value biased toward positive range
+                float v = rng.nextFloat();
+                param->setValueNotifyingHost(v);
+                param->endChangeGesture();
+            }
+        }
         if (stepSeqGrid != nullptr) stepSeqGrid->repaint();
     }
 
-    // ── Attachments ───────────────────────────────────────────────────────────
+    void updateBankButtons(int activeBank)
+    {
+        auto style = [&](juce::TextButton& btn, int idx)
+            {
+                btn.setColour(juce::TextButton::buttonColourId,
+                    (idx == activeBank) ? ACCENT : juce::Colour(0xff1a1a1a));
+                btn.setColour(juce::TextButton::textColourOffId,
+                    (idx == activeBank) ? TEXT_LIGHT : TEXT_MUTED);
+            };
+        style(bankBtn1, 0); style(bankBtn2, 1);
+        style(bankBtn3, 2); style(bankBtn4, 3);
+    }
+
+    void selectBank(int bank)
+    {
+        if (auto* param = audioProcessor.apvts.getParameter(ParamID::STEP_SEQ_BANK))
+        {
+            param->beginChangeGesture();
+            param->setValueNotifyingHost(param->convertTo0to1((float)bank));
+            param->endChangeGesture();
+        }
+        updateBankButtons(bank);
+        if (stepSeqGrid != nullptr) { stepSeqGrid->setActiveBank(bank); stepSeqGrid->repaint(); }
+    }
+
+    // ── APVTS attachments ─────────────────────────────────────────────────────
     using SliderAtt = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAtt = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using ComboAtt = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
 
     std::unique_ptr<SliderAtt> bitDepthAtt, ditheringAtt;
-    std::unique_ptr<SliderAtt> resampleFreqAtt, approxDeviationAtt, imagesShiftAtt;
-    std::unique_ptr<SliderAtt> filterCutoffAtt, filterResonanceAtt;
-    std::unique_ptr<SliderAtt> waveCrushAmountAtt;
-    std::unique_ptr<SliderAtt> ringModFreqAtt, ringModMixAtt;
-    std::unique_ptr<SliderAtt> lfoRateAtt, lfoDepthAtt;
-    std::unique_ptr<SliderAtt> stepSeqRateAtt, stepSeqDepthAtt;
-    std::unique_ptr<SliderAtt> preampAtt, fxMixAtt, outputVolumeAtt;
-
     std::unique_ptr<ButtonAtt> bitDepthOnAtt, dcShiftAtt;
-    std::unique_ptr<ButtonAtt> resampleOnAtt, approxOnAtt, imagesOnAtt;
-    std::unique_ptr<ButtonAtt> waveCrushOnAtt, ringModOnAtt, stepSeqOnAtt;
 
-    std::unique_ptr<ComboAtt> filterTypeAtt, filterOrderAtt;
-    std::unique_ptr<ComboAtt> waveCrushModeAtt;
-    std::unique_ptr<ComboAtt> lfoWaveformAtt, lfoTargetAtt;
-    std::unique_ptr<ComboAtt> stepSeqTargetAtt;
+    std::unique_ptr<SliderAtt> driveAmountAtt, driveBiasAtt, driveMixAtt;
+    std::unique_ptr<ButtonAtt> driveEnabledAtt;
+    std::unique_ptr<ComboAtt>  driveModeAtt;
+
+    std::unique_ptr<SliderAtt> resampleFreqAtt, approxDeviationAtt, imagesShiftAtt, jitterAtt;
+    std::unique_ptr<ButtonAtt> resampleOnAtt, approxOnAtt, imagesOnAtt;
+
+    std::unique_ptr<SliderAtt> filterCutoffAtt, filterResonanceAtt;
+    std::unique_ptr<ComboAtt>  filterTypeAtt, filterOrderAtt;
+
+    std::unique_ptr<SliderAtt> waveCrushAmountAtt;
+    std::unique_ptr<ButtonAtt> waveCrushOnAtt;
+    std::unique_ptr<ComboAtt>  waveCrushModeAtt;
+
+    std::unique_ptr<SliderAtt> ringModFreqAtt, ringModMixAtt;
+    std::unique_ptr<ButtonAtt> ringModOnAtt;
+
+    std::unique_ptr<SliderAtt> noiseAmountAtt, noiseColourAtt;
+    std::unique_ptr<ButtonAtt> noiseEnabledAtt;
+    std::unique_ptr<ComboAtt>  noiseTypeAtt;
+
+    std::unique_ptr<SliderAtt> lfoRateAtt, lfoDepthAtt;
+    std::unique_ptr<ComboAtt>  lfoWaveformAtt, lfoTargetAtt;
+
+    std::unique_ptr<SliderAtt> stepSeqRateAtt, stepSeqDepthAtt, stepSeqSwingAtt, stepSeqLenAtt;
+    std::unique_ptr<ButtonAtt> stepSeqOnAtt;
+    std::unique_ptr<ComboAtt>  stepSeqTargetAtt, stepSeqDirAtt;
+
+    std::unique_ptr<SliderAtt> preampAtt, fxMixAtt, outputVolumeAtt;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BitMorphAudioProcessorEditor)
 };
