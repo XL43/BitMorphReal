@@ -26,6 +26,10 @@ public:
     void drawToggleButton(juce::Graphics&, juce::ToggleButton&,
         bool highlighted, bool down) override;
 
+    void drawLinearSlider(juce::Graphics&, int x, int y, int width, int height,
+        float sliderPos, float minSliderPos, float maxSliderPos,
+        juce::Slider::SliderStyle, juce::Slider&) override;
+
     // Icon buttons: name the button "dice", "xarr", or "star" to get custom drawing
     void drawButtonText(juce::Graphics&, juce::TextButton&,
         bool highlighted, bool down) override;
@@ -408,17 +412,48 @@ private:
         updateFaveButton();
     }
 
+    // Handles both APVTS native format (<PARAM id=... value=.../> children)
+    // and factory flat-attribute format (<BitMorphParams preampGain="0.0" .../>).
+    void applyXmlPreset(const juce::File& file)
+    {
+        if (!file.existsAsFile()) return;
+        auto xml = juce::XmlDocument::parse(file);
+        if (xml == nullptr) return;
+
+        if (xml->getChildByName("PARAM") != nullptr)
+        {
+            // Plugin-saved preset in APVTS native format
+            auto state = juce::ValueTree::fromXml(*xml);
+            if (state.isValid())
+                audioProcessor.apvts.replaceState(state);
+        }
+        else
+        {
+            // Flat-attribute format used by all factory presets
+            for (int i = 0; i < xml->getNumAttributes(); ++i)
+            {
+                auto paramID = xml->getAttributeName(i);
+                float val = (float)xml->getDoubleAttribute(paramID, 0.0);
+
+                if (auto* p = dynamic_cast<juce::RangedAudioParameter*>(
+                    audioProcessor.apvts.getParameter(paramID)))
+                {
+                    p->beginChangeGesture();
+                    p->setValueNotifyingHost(p->convertTo0to1(val));
+                    p->endChangeGesture();
+                }
+            }
+        }
+
+        if (stepSeqGrid != nullptr) stepSeqGrid->repaint();
+    }
+
     void loadPresetByIndex(int index)
     {
         if (index < 0 || index >= allPresets.size()) return;
-        auto& entry = allPresets[index];
-        if (!entry.file.existsAsFile()) return;
-        juce::MemoryBlock data;
-        entry.file.loadFileAsData(data);
-        audioProcessor.setStateInformation(data.getData(), (int)data.getSize());
+        applyXmlPreset(allPresets[index].file);
         currentPresetIndex = index;
         updatePresetLabel();
-        if (stepSeqGrid != nullptr) stepSeqGrid->repaint();
     }
 
     void initializePreset()
@@ -518,9 +553,18 @@ private:
                 auto result = fc.getResult();
                 if (result == juce::File{}) return;
                 auto file = result.withFileExtension(".xml");
-                juce::MemoryBlock data;
-                audioProcessor.getStateInformation(data);
-                file.replaceWithData(data.getData(), data.getSize());
+
+                // Write flat-attribute format: <BitMorphParams param="val" .../>
+                // This matches factory preset format and loads via applyXmlPreset.
+                juce::XmlElement xml("BitMorphParams");
+                for (auto* rawParam : audioProcessor.apvts.processor.getParameters())
+                {
+                    if (auto* p = dynamic_cast<juce::RangedAudioParameter*> (rawParam))
+                        xml.setAttribute(p->getParameterID(),
+                            (double)p->convertFrom0to1(p->getValue()));
+                }
+                xml.writeTo(file, juce::XmlElement::TextFormat());
+
                 refreshPresetList();
                 for (int i = 0; i < allPresets.size(); ++i)
                     if (allPresets[i].file == file) { currentPresetIndex = i; break; }
@@ -537,11 +581,35 @@ private:
     void randomizeParameters()
     {
         juce::Random rng;
-        for (auto* param : audioProcessor.apvts.processor.getParameters())
+        for (auto* rawParam : audioProcessor.apvts.processor.getParameters())
         {
-            param->beginChangeGesture();
-            param->setValueNotifyingHost(rng.nextFloat());
-            param->endChangeGesture();
+            auto* param = dynamic_cast<juce::RangedAudioParameter*> (rawParam);
+            if (param == nullptr) continue;
+
+            auto id = param->getParameterID();
+
+            if (id == ParamID::PREAMP_GAIN)
+            {
+                // Clamp to 0 – 5 dB
+                float safeVal = rng.nextFloat() * 5.0f;
+                param->beginChangeGesture();
+                param->setValueNotifyingHost(param->convertTo0to1(safeVal));
+                param->endChangeGesture();
+            }
+            else if (id == ParamID::OUTPUT_VOLUME)
+            {
+                // Clamp to -5 – +5 dB
+                float safeVal = (rng.nextFloat() * 10.0f) - 5.0f;
+                param->beginChangeGesture();
+                param->setValueNotifyingHost(param->convertTo0to1(safeVal));
+                param->endChangeGesture();
+            }
+            else
+            {
+                param->beginChangeGesture();
+                param->setValueNotifyingHost(rng.nextFloat());
+                param->endChangeGesture();
+            }
         }
         currentPresetIndex = -1;
         presetNameBtn.setButtonText("-- Randomized --");

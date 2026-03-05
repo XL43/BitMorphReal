@@ -16,6 +16,11 @@ BitMorphLookAndFeel::BitMorphLookAndFeel()
     setColour(juce::PopupMenu::textColourId, TEXT_LIGHT);
     setColour(juce::PopupMenu::highlightedBackgroundColourId, ACCENT);
     setColour(juce::Label::textColourId, TEXT_MUTED);
+
+    // Linear slider colours (orange thumb / track, dark background)
+    setColour(juce::Slider::thumbColourId, ACCENT);
+    setColour(juce::Slider::trackColourId, ACCENT);
+    setColour(juce::Slider::backgroundColourId, juce::Colour(0xff1a1a1a));
 }
 
 void BitMorphLookAndFeel::drawRotarySlider(juce::Graphics& g,
@@ -83,6 +88,41 @@ void BitMorphLookAndFeel::drawToggleButton(juce::Graphics& g,
         (int)(ledX + ledSize + 5), 0,
         button.getWidth() - (int)(ledX + ledSize + 5), button.getHeight(),
         juce::Justification::centredLeft);
+}
+
+void BitMorphLookAndFeel::drawLinearSlider(juce::Graphics& g,
+    int x, int y, int width, int height,
+    float sliderPos,
+    float /*minSliderPos*/, float /*maxSliderPos*/,
+    juce::Slider::SliderStyle style,
+    juce::Slider& slider)
+{
+    if (style == juce::Slider::LinearHorizontal)
+    {
+        float trackY = y + height * 0.5f;
+        float trackH = 3.0f;
+
+        // Track background
+        g.setColour(juce::Colour(0xff1a1a1a));
+        g.fillRoundedRectangle((float)x, trackY - trackH * 0.5f, (float)width, trackH, 1.5f);
+
+        // Filled portion
+        g.setColour(ACCENT);
+        g.fillRoundedRectangle((float)x, trackY - trackH * 0.5f,
+            sliderPos - (float)x, trackH, 1.5f);
+
+        // Thumb
+        float thumbR = 7.0f;
+        g.setColour(ACCENT);
+        g.fillEllipse(sliderPos - thumbR, trackY - thumbR, thumbR * 2.0f, thumbR * 2.0f);
+        g.setColour(BORDER_CLR);
+        g.drawEllipse(sliderPos - thumbR, trackY - thumbR, thumbR * 2.0f, thumbR * 2.0f, 1.0f);
+    }
+    else
+    {
+        LookAndFeel_V4::drawLinearSlider(g, x, y, width, height,
+            sliderPos, 0.0f, 0.0f, style, slider);
+    }
 }
 
 void BitMorphLookAndFeel::drawButtonText(juce::Graphics& g,
@@ -272,9 +312,8 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
                 {
                     auto result = fc.getResult();
                     if (!result.existsAsFile()) return;
-                    juce::MemoryBlock data;
-                    result.loadFileAsData(data);
-                    audioProcessor.setStateInformation(data.getData(), (int)data.getSize());
+                    applyXmlPreset(result);
+                    refreshPresetList();
                     for (int i = 0; i < allPresets.size(); ++i)
                         if (allPresets[i].file == result) { currentPresetIndex = i; break; }
                     updatePresetLabel();

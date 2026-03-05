@@ -117,20 +117,33 @@ BitMorphAudioProcessor::BitMorphAudioProcessor()
         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
     apvts(*this, nullptr, "BitMorphParams", createParameterLayout())
 {
+    // Register our lightweight listener on every parameter so that
+    // paramsDirty is set whenever anything changes — including automation,
+    // GUI interaction, or a preset load. snapshotParameters() will then
+    // only run at the start of the next process block, not every block.
+    for (auto* param : getParameters())
+        param->addListener(&paramChangeListener);
 }
 
-BitMorphAudioProcessor::~BitMorphAudioProcessor() {}
+BitMorphAudioProcessor::~BitMorphAudioProcessor()
+{
+    for (auto* param : getParameters())
+        param->removeListener(&paramChangeListener);
+}
 
 // =============================================================================
 //  Prepare / Release
 // =============================================================================
 void BitMorphAudioProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
 {
-    float sr = static_cast<float> (sampleRate);
+    float sr = static_cast<float>(sampleRate);
     processorL.prepare(sr);
     processorR.prepare(sr);
     lfo.setSampleRate(sr);
     stepSeq.setSampleRate(sr);
+
+    // Force a full snapshot on the next block after a stream restart.
+    paramChangeListener.dirty.store(true, std::memory_order_relaxed);
     snapshotParameters();
 }
 
@@ -143,15 +156,15 @@ void BitMorphAudioProcessor::releaseResources()
 }
 
 // =============================================================================
-//  Parameter snapshot
+//  Parameter snapshot  (called only when something actually changed)
 // =============================================================================
 void BitMorphAudioProcessor::snapshotParameters()
 {
-    float sr = static_cast<float> (getSampleRate());
+    float sr = static_cast<float>(getSampleRate());
 
     auto getF = [&](const char* id) { return apvts.getRawParameterValue(id)->load(); };
     auto getB = [&](const char* id) { return apvts.getRawParameterValue(id)->load() > 0.5f; };
-    auto getI = [&](const char* id) { return static_cast<int> (apvts.getRawParameterValue(id)->load()); };
+    auto getI = [&](const char* id) { return static_cast<int>(apvts.getRawParameterValue(id)->load()); };
 
     params.preampGain = juce::Decibels::decibelsToGain(getF(ParamID::PREAMP_GAIN), -96.0f);
 
@@ -203,7 +216,7 @@ void BitMorphAudioProcessor::snapshotParameters()
     params.stepSeqTarget = getI(ParamID::STEP_SEQ_TARGET);
     params.stepSeqSwing = getF(ParamID::STEP_SEQ_SWING);
     params.stepSeqDir = getI(ParamID::STEP_SEQ_DIR);
-    params.stepSeqLength = static_cast<int> (std::round(getF(ParamID::STEP_SEQ_LENGTH)));
+    params.stepSeqLength = static_cast<int>(std::round(getF(ParamID::STEP_SEQ_LENGTH)));
     params.stepSeqBank = getI(ParamID::STEP_SEQ_BANK);
 
     params.fxMix = getF(ParamID::FX_MIX);
@@ -228,8 +241,8 @@ void BitMorphAudioProcessor::snapshotParameters()
     processorR.drive.setAmount(params.driveAmount);
     processorL.drive.setBias(params.driveBias);
     processorR.drive.setBias(params.driveBias);
-    processorL.drive.setMode(static_cast<DriveProcessor::Mode> (params.driveMode));
-    processorR.drive.setMode(static_cast<DriveProcessor::Mode> (params.driveMode));
+    processorL.drive.setMode(static_cast<DriveProcessor::Mode>(params.driveMode));
+    processorR.drive.setMode(static_cast<DriveProcessor::Mode>(params.driveMode));
     processorL.drive.setMix(params.driveMix);
     processorR.drive.setMix(params.driveMix);
 
@@ -266,8 +279,8 @@ void BitMorphAudioProcessor::snapshotParameters()
 
     processorL.waveCrusher.setEnabled(params.waveCrushEnabled);
     processorR.waveCrusher.setEnabled(params.waveCrushEnabled);
-    processorL.waveCrusher.setMode(static_cast<WaveCrusher::Mode> (params.waveCrushMode));
-    processorR.waveCrusher.setMode(static_cast<WaveCrusher::Mode> (params.waveCrushMode));
+    processorL.waveCrusher.setMode(static_cast<WaveCrusher::Mode>(params.waveCrushMode));
+    processorR.waveCrusher.setMode(static_cast<WaveCrusher::Mode>(params.waveCrushMode));
     processorL.waveCrusher.setAmount(params.waveCrushAmount);
     processorR.waveCrusher.setAmount(params.waveCrushAmount);
 
@@ -282,24 +295,24 @@ void BitMorphAudioProcessor::snapshotParameters()
     processorR.noise.setEnabled(params.noiseEnabled);
     processorL.noise.setAmount(params.noiseAmount);
     processorR.noise.setAmount(params.noiseAmount);
-    processorL.noise.setType(static_cast<NoiseProcessor::Type> (params.noiseType));
-    processorR.noise.setType(static_cast<NoiseProcessor::Type> (params.noiseType));
+    processorL.noise.setType(static_cast<NoiseProcessor::Type>(params.noiseType));
+    processorR.noise.setType(static_cast<NoiseProcessor::Type>(params.noiseType));
     processorL.noise.setColour(params.noiseColour);
     processorR.noise.setColour(params.noiseColour);
 
     lfo.setRate(params.lfoRate);
     lfo.setDepth(params.lfoDepth);
-    lfo.setWaveform(static_cast<LFO::Waveform> (params.lfoWaveform));
-    lfo.setTarget(static_cast<LFO::Target>   (params.lfoTarget));
+    lfo.setWaveform(static_cast<LFO::Waveform>(params.lfoWaveform));
+    lfo.setTarget(static_cast<LFO::Target>(params.lfoTarget));
 
     stepSeq.setEnabled(params.stepSeqEnabled);
     stepSeq.setDepth(params.stepSeqDepth);
-    stepSeq.setTarget(static_cast<StepSequencer::Target>    (params.stepSeqTarget));
-    stepSeq.setDirection(static_cast<StepSequencer::Direction> (params.stepSeqDir));
+    stepSeq.setTarget(static_cast<StepSequencer::Target>(params.stepSeqTarget));
+    stepSeq.setDirection(static_cast<StepSequencer::Direction>(params.stepSeqDir));
     stepSeq.setLength(params.stepSeqLength);
     stepSeq.setSwing(params.stepSeqSwing);
     stepSeq.setActiveBank(params.stepSeqBank);
-    stepSeq.setTempo(static_cast<float> (currentBPM), params.stepSeqRate);
+    stepSeq.setTempo(static_cast<float>(currentBPM), params.stepSeqRate);
 }
 
 // =============================================================================
@@ -309,7 +322,7 @@ void BitMorphAudioProcessor::applyModulations(float lfoOut, float stepSeqOut,
     float& bitDepth, float& resampleFreq,
     float& waveCrushAmt, float& ringFreq)
 {
-    switch (static_cast<LFO::Target> (params.lfoTarget))
+    switch (static_cast<LFO::Target>(params.lfoTarget))
     {
     case LFO::Target::BitDepth:
         bitDepth = juce::jlimit(1.0f, 24.0f, bitDepth + lfoOut * 8.0f); break;
@@ -321,7 +334,7 @@ void BitMorphAudioProcessor::applyModulations(float lfoOut, float stepSeqOut,
         ringFreq = juce::jlimit(0.1f, 1000.0f, ringFreq + lfoOut * 200.0f); break;
     }
 
-    switch (static_cast<StepSequencer::Target> (params.stepSeqTarget))
+    switch (static_cast<StepSequencer::Target>(params.stepSeqTarget))
     {
     case StepSequencer::Target::BitDepth:
         bitDepth = juce::jlimit(1.0f, 24.0f, bitDepth + stepSeqOut * 8.0f); break;
@@ -350,7 +363,12 @@ void BitMorphAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             if (auto bpm = pos->getBpm())
                 currentBPM = *bpm;
 
-    snapshotParameters();
+    // Only re-snapshot parameters when something has actually changed.
+    // The paramChangeListener sets dirty = true whenever any parameter moves
+    // (automation, GUI, preset load, etc.), so this runs at most once per
+    // changed block instead of unconditionally every block.
+    if (paramChangeListener.dirty.exchange(false, std::memory_order_acq_rel))
+        snapshotParameters();
 
     float* dataL = buffer.getWritePointer(0);
     float* dataR = (numChannels > 1) ? buffer.getWritePointer(1) : dataL;
@@ -365,28 +383,48 @@ void BitMorphAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     default: break;
     }
 
-    float sr = static_cast<float> (getSampleRate());
+    float sr = static_cast<float>(getSampleRate());
+
+    // Pre-compute whether any modulation source is actually running.
+    // When neither LFO nor step sequencer is active, we skip all the
+    // per-sample DSP setter calls entirely — those can be expensive if they
+    // recalculate coefficients internally.
+    const bool lfoActive = params.lfoDepth > 0.001f;
+    const bool stepActive = params.stepSeqEnabled;
+    const bool anyModActive = lfoActive || stepActive;
 
     for (int i = 0; i < numSamples; ++i)
     {
-        float lfoOut = lfo.tick();
-        float stepSeqOut = stepSeq.tick();
-
         float modBitDepth = params.bitDepth;
         float modResampleFreq = params.resampleFreq;
         float modWaveCrushAmt = params.waveCrushAmount;
         float modRingFreq = params.ringModFreq;
 
-        applyModulations(lfoOut, stepSeqOut,
-            modBitDepth, modResampleFreq,
-            modWaveCrushAmt, modRingFreq);
+        if (anyModActive)
+        {
+            // Tick both modulators every sample so their phases stay correct
+            // even when only one of them is doing something useful.
+            float lfoOut = lfoActive ? lfo.tick() : (lfo.tick(), 0.0f);
+            float stepOut = stepActive ? stepSeq.tick() : (stepSeq.tick(), 0.0f);
 
-        processorL.resampler.setFrequency(modResampleFreq, sr);
-        processorR.resampler.setFrequency(modResampleFreq, sr);
-        processorL.waveCrusher.setAmount(modWaveCrushAmt);
-        processorR.waveCrusher.setAmount(modWaveCrushAmt);
-        processorL.ringMod.setFrequency(modRingFreq);
-        processorR.ringMod.setFrequency(modRingFreq);
+            applyModulations(lfoOut, stepOut,
+                modBitDepth, modResampleFreq,
+                modWaveCrushAmt, modRingFreq);
+
+            // Only push modulated values to DSP objects when modulation is live.
+            processorL.resampler.setFrequency(modResampleFreq, sr);
+            processorR.resampler.setFrequency(modResampleFreq, sr);
+            processorL.waveCrusher.setAmount(modWaveCrushAmt);
+            processorR.waveCrusher.setAmount(modWaveCrushAmt);
+            processorL.ringMod.setFrequency(modRingFreq);
+            processorR.ringMod.setFrequency(modRingFreq);
+        }
+        else
+        {
+            // Still advance both modulators so they're in sync if re-enabled.
+            lfo.tick();
+            stepSeq.tick();
+        }
 
         dataL[i] = processorL.process(dataL[i], params.preampGain,
             params.approxEnabled, params.imagesEnabled,
@@ -416,6 +454,10 @@ void BitMorphAudioProcessor::setStateInformation(const void* data, int sizeInByt
     if (xmlState != nullptr)
         if (xmlState->hasTagName(apvts.state.getType()))
             apvts.replaceState(juce::ValueTree::fromXml(*xmlState));
+
+    // replaceState doesn't fire individual parameter listeners, so mark dirty
+    // manually to ensure the next block picks up the restored values.
+    paramChangeListener.dirty.store(true, std::memory_order_relaxed);
 }
 
 // =============================================================================

@@ -137,6 +137,26 @@ public:
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
+    // -------------------------------------------------------------------------
+    //  Lightweight listener: any parameter touch sets the dirty flag so that
+    //  snapshotParameters() is only called when something has actually changed,
+    //  rather than every single process block.
+    // -------------------------------------------------------------------------
+    struct ParamChangeListener : public juce::AudioProcessorParameter::Listener
+    {
+        std::atomic<bool> dirty{ true };   // true on startup so first block always snapshots
+
+        void parameterValueChanged(int /*index*/, float /*newValue*/) override
+        {
+            dirty.store(true, std::memory_order_relaxed);
+        }
+        void parameterGestureChanged(int /*index*/, bool /*starting*/) override {}
+    };
+
+    ParamChangeListener paramChangeListener;
+
+    // -------------------------------------------------------------------------
+
     BitMorphProcessor processorL;
     BitMorphProcessor processorR;
     LFO               lfo;
