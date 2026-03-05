@@ -1,0 +1,309 @@
+# =============================================================================
+#  BitMorph  -  GitHub Actions: Build + Release
+#  File location in your repo: .github/workflows/release.yml
+#
+#  Trigger: push a version tag
+#    git tag v1.0
+#    git push origin v1.0
+#
+#  Produces:
+#    Windows  ->  BitMorph_v1.0_Windows_Setup.exe   (via Inno Setup)
+#    macOS    ->  BitMorph_v1.0_macOS.pkg            (via pkgbuild)
+#    Linux    ->  BitMorph_v1.0_Linux.run            (self-extracting)
+#
+#  Your repo structure assumed:
+#    BitMorph.jucer
+#    Builds/VisualStudio2026/     <- Projucer-generated VS solution
+#    Source/
+#    Presets/
+#    JuceLibraryCode/
+#    installers/
+#      windows/BitMorph_Setup.iss
+#      macos/build_installer.sh
+#      linux/install.sh
+#      linux/make_self_extracting.sh
+# =============================================================================
+
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g. 1.0)'
+        required: true
+        default: '1.0'
+
+jobs:
+
+  # ===========================================================================
+  #  WINDOWS
+  # ===========================================================================
+  build-windows:
+    name: Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Download the same JUCE version you use locally
+      - name: Download JUCE
+        shell: bash
+        run: |
+          curl -L https://github.com/juce-framework/JUCE/releases/download/7.0.9/juce-7.0.9-windows.zip \
+            -o juce.zip
+          unzip -q juce.zip -d juce_extracted
+          echo "JUCE_DIR=$(pwd)/juce_extracted/JUCE" >> $GITHUB_ENV
+
+      - name: Run Projucer
+        shell: bash
+        run: |
+          PROJUCER="${{ env.JUCE_DIR }}/Projucer.exe"
+          # Tell Projucer where JUCE modules are on this runner before resaving
+          "$PROJUCER" --set-global-search-path windows defaultJuceModulePath             "$(cygpath -w "${{ env.JUCE_DIR }}/modules")"
+          "$PROJUCER" --resave BitMorph.jucer
+
+      # Build with MSBuild (works with both VS2022 and VS2026 solutions)
+      - name: Build VST3
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (
+            `vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath`
+          ) do set VS_PATH=%%i
+          "%VS_PATH%\MSBuild\Current\Bin\MSBuild.exe" ^
+            Builds\VisualStudio2026\BitMorph.sln ^
+            /p:Configuration=Release ^
+            /p:Platform=x64 ^
+            /m
+
+      - name: Find VST3
+        shell: bash
+        run: |
+          VST3=$(find Builds -name "BitMorph.vst3" -type d | head -1)
+          echo "VST3_PATH=$VST3" >> $GITHUB_ENV
+          echo "Found VST3 at: $VST3"
+
+      # Install Inno Setup and build the installer
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Build Windows installer
+        shell: bash
+        run: |
+          TAG=${GITHUB_REF_NAME}
+
+          # Patch the .iss paths to point at the files in the runner
+          sed -i \
+            "s|C:\\\\path\\\\to\\\\your\\\\BitMorph.vst3|$(cygpath -w "$VST3_PATH")|" \
+            installers/windows/BitMorph_Setup.iss
+          sed -i \
+            "s|C:\\\\path\\\\to\\\\your\\\\Presets|$(pwd)\\\\Presets|" \
+            installers/windows/BitMorph_Setup.iss
+
+          # Also update the version in the .iss to match the tag (strips leading 'v')
+          VERSION="${TAG#v}"
+          sed -i "s/#define AppVersion.*/#define AppVersion \"$VERSION\"/" \
+            installers/windows/BitMorph_Setup.iss
+
+          cd installers/windows
+          mkdir -p installer_output
+          iscc BitMorph_Setup.iss
+
+          # Rename to include the tag
+          mv installer_output/BitMorph_v*_Windows_Setup.exe \
+            "../../BitMorph_${TAG}_Windows_Setup.exe"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: "*.exe"
+
+  # ===========================================================================
+  #  MACOS
+  # ===========================================================================
+  build-macos:
+    name: macOS
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download JUCE
+        run: |
+          curl -L https://github.com/juce-framework/JUCE/releases/download/7.0.9/juce-7.0.9-osx.zip \
+            -o juce.zip
+          unzip -q juce.zip -d juce_extracted
+          echo "JUCE_DIR=$(pwd)/juce_extracted/JUCE" >> $GITHUB_ENV
+
+      - name: Run Projucer
+        run: |
+          PROJUCER="${{ env.JUCE_DIR }}/Projucer.app/Contents/MacOS/Projucer"
+          # Tell Projucer where JUCE modules are on this runner before resaving
+          "$PROJUCER" --set-global-search-path osx defaultJuceModulePath             "${{ env.JUCE_DIR }}/modules"
+          "$PROJUCER" --resave BitMorph.jucer
+
+      - name: Build VST3 (universal binary)
+        run: |
+          XCODEPROJ=$(find Builds -name "*.xcodeproj" | head -1)
+          echo "Building: $XCODEPROJ"
+          # List available schemes so we can pick the right one
+          SCHEME=$(xcodebuild -project "$XCODEPROJ" -list 2>/dev/null | grep -i "VST3" | head -1 | xargs || echo "BitMorph - VST3")
+          echo "Using scheme: $SCHEME"
+          xcodebuild \
+            -project "$XCODEPROJ" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            ONLY_ACTIVE_ARCH=NO \
+            ARCHS="arm64 x86_64" \
+            build
+
+      - name: Find VST3
+        run: |
+          VST3=$(find Builds -name "BitMorph.vst3" -type d | head -1)
+          echo "VST3_PATH=$VST3" >> $GITHUB_ENV
+          echo "Found VST3 at: $VST3"
+
+      - name: Stage and build .pkg
+        run: |
+          mkdir -p installer_stage/build
+          cp -R "$VST3_PATH" installer_stage/build/BitMorph.vst3
+          cp -R Presets installer_stage/Presets
+          cp installers/macos/build_installer.sh installer_stage/
+          cd installer_stage
+          chmod +x build_installer.sh
+          ./build_installer.sh
+
+      - name: Rename output
+        run: |
+          TAG=${GITHUB_REF_NAME}
+          mv installer_stage/BitMorph_v*.pkg "BitMorph_${TAG}_macOS.pkg"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installer
+          path: "*.pkg"
+
+  # ===========================================================================
+  #  LINUX
+  # ===========================================================================
+  build-linux:
+    name: Linux
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libasound2-dev \
+            libfreetype6-dev \
+            libcurl4-openssl-dev \
+            libwebkit2gtk-4.0-dev \
+            libgtk-3-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            pkg-config
+
+      - name: Download JUCE
+        run: |
+          curl -L https://github.com/juce-framework/JUCE/releases/download/7.0.9/juce-7.0.9-linux.zip \
+            -o juce.zip
+          unzip -q juce.zip -d juce_extracted
+          echo "JUCE_DIR=$(pwd)/juce_extracted/JUCE" >> $GITHUB_ENV
+
+      - name: Run Projucer
+        run: |
+          chmod +x "${{ env.JUCE_DIR }}/Projucer"
+          PROJUCER="${{ env.JUCE_DIR }}/Projucer"
+          # Tell Projucer where JUCE modules are on this runner before resaving
+          "$PROJUCER" --set-global-search-path linux defaultJuceModulePath             "${{ env.JUCE_DIR }}/modules"
+          "$PROJUCER" --resave BitMorph.jucer
+
+      - name: Build VST3
+        run: |
+          MAKEDIR=$(find Builds -name "Makefile" -not -path "*/.*" | head -1 | xargs dirname)
+          echo "Building in: $MAKEDIR"
+          cd "$MAKEDIR"
+          make CONFIG=Release -j$(nproc)
+
+      - name: Find VST3
+        run: |
+          VST3=$(find Builds -name "BitMorph.vst3" -type d | head -1)
+          echo "VST3_PATH=$VST3" >> $GITHUB_ENV
+          echo "Found VST3 at: $VST3"
+
+      - name: Build self-extracting .run
+        run: |
+          mkdir -p linux_stage
+          cp -R "$VST3_PATH" linux_stage/BitMorph.vst3
+          cp -R Presets linux_stage/Presets
+          cp installers/linux/install.sh linux_stage/
+          cp installers/linux/make_self_extracting.sh linux_stage/
+          cd linux_stage
+          chmod +x install.sh make_self_extracting.sh
+          ./make_self_extracting.sh
+
+      - name: Rename output
+        run: |
+          TAG=${GITHUB_REF_NAME}
+          mv linux_stage/BitMorph_v*.run "BitMorph_${TAG}_Linux.run"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-installer
+          path: "*.run"
+
+  # ===========================================================================
+  #  CREATE GITHUB RELEASE
+  # ===========================================================================
+  create-release:
+    name: Create GitHub Release
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release_files
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "BitMorph ${{ github.ref_name }}"
+          body: |
+            ## BitMorph ${{ github.ref_name }}
+
+            | Platform | Download |
+            |----------|----------|
+            | Windows 10/11 | `BitMorph_${{ github.ref_name }}_Windows_Setup.exe` |
+            | macOS 10.15+ | `BitMorph_${{ github.ref_name }}_macOS.pkg` |
+            | Linux | `BitMorph_${{ github.ref_name }}_Linux.run` |
+
+            **Windows** — Run the `.exe` and follow the installer. Choose your VST3 folder (the default is correct for most DAWs).
+
+            **macOS** — Open the `.pkg`. If Gatekeeper blocks it, right-click → Open, or go to System Settings → Privacy & Security → Open Anyway.
+
+            **Linux** — `chmod +x BitMorph_*.run && ./BitMorph_*.run`
+
+            Factory presets (30) install automatically to `Documents/JUCE Projects/BitMorph/Presets/`.
+          files: release_files/*
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
