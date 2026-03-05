@@ -78,6 +78,7 @@ jobs:
             Builds\VisualStudio2026\BitMorph.sln ^
             /p:Configuration=Release ^
             /p:Platform=x64 ^
+            /p:PlatformToolset=v143 ^
             /m
 
       - name: Find VST3
@@ -169,20 +170,59 @@ jobs:
           echo "VST3_PATH=$VST3" >> $GITHUB_ENV
           echo "Found VST3 at: $VST3"
 
-      - name: Stage and build .pkg
+      - name: Build .pkg
         run: |
-          mkdir -p installer_stage/build
-          cp -R "$VST3_PATH" installer_stage/build/BitMorph.vst3
-          cp -R Presets installer_stage/Presets
-          cp installers/macos/build_installer.sh installer_stage/
-          cd installer_stage
-          chmod +x build_installer.sh
-          ./build_installer.sh
+          TAG=${GITHUB_REF_NAME:-$(echo "${{ github.event.inputs.version }}" | sed 's/^/v/')}
+          VERSION="${TAG#v}"
 
-      - name: Rename output
-        run: |
-          TAG=${GITHUB_REF_NAME}
-          mv installer_stage/BitMorph_v*.pkg "BitMorph_${TAG}_macOS.pkg"
+          # Stage VST3
+          VST3_INSTALL="/Library/Audio/Plug-Ins/VST3"
+          STAGE="$(mktemp -d)/root"
+          mkdir -p "${STAGE}${VST3_INSTALL}"
+          cp -R "$VST3_PATH" "${STAGE}${VST3_INSTALL}/BitMorph.vst3"
+          xattr -cr "${STAGE}${VST3_INSTALL}/BitMorph.vst3" 2>/dev/null || true
+
+          # Stage presets via postinstall script
+          SCRIPTS_DIR="$(mktemp -d)/scripts"
+          mkdir -p "$SCRIPTS_DIR"
+          cat > "$SCRIPTS_DIR/postinstall" << 'POSTEOF'
+#!/bin/bash
+SRC="/Library/Application Support/BitMorph/Presets"
+DEST="${HOME}/Documents/JUCE Projects/BitMorph/Presets"
+if [ -d "$SRC" ]; then
+  mkdir -p "$DEST"
+  rsync -a --ignore-existing "$SRC/" "$DEST/" 2>/dev/null ||     cp -Rn "$SRC/." "$DEST/"
+fi
+POSTEOF
+          chmod +x "$SCRIPTS_DIR/postinstall"
+
+          # Copy presets into payload
+          mkdir -p "${STAGE}/Library/Application Support/BitMorph/Presets"
+          cp -R Presets/. "${STAGE}/Library/Application Support/BitMorph/Presets/"
+
+          # Build component pkg
+          PKGS_DIR="$(mktemp -d)"
+          pkgbuild             --root "$STAGE"             --identifier "com.evrshade.bitmorph.vst3"             --version "$VERSION"             --install-location "/"             --scripts "$SCRIPTS_DIR"             "$PKGS_DIR/BitMorph_VST3.pkg"
+
+          # Build distribution pkg
+          cat > /tmp/distribution.xml << XMLEOF
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="1">
+  <title>BitMorph v${VERSION}</title>
+  <options customize="allow" require-scripts="false"/>
+  <allowed-os-versions><os-version min="10.15"/></allowed-os-versions>
+  <choice id="vst3" title="BitMorph VST3 Plugin" start_selected="true">
+    <pkg-ref id="com.evrshade.bitmorph.vst3"/>
+  </choice>
+  <choices-outline><line choice="vst3"/></choices-outline>
+  <pkg-ref id="com.evrshade.bitmorph.vst3" version="${VERSION}" auth="root">BitMorph_VST3.pkg</pkg-ref>
+</installer-gui-script>
+XMLEOF
+
+          productbuild             --distribution /tmp/distribution.xml             --package-path "$PKGS_DIR"             "BitMorph_${TAG}_macOS.pkg"
+
+      - name: Verify output
+        run: ls -lh BitMorph_*_macOS.pkg
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -247,19 +287,89 @@ jobs:
 
       - name: Build self-extracting .run
         run: |
+          TAG=${GITHUB_REF_NAME:-v${{ github.event.inputs.version }}}
+          VERSION="${TAG#v}"
+
           mkdir -p linux_stage
           cp -R "$VST3_PATH" linux_stage/BitMorph.vst3
           cp -R Presets linux_stage/Presets
-          cp installers/linux/install.sh linux_stage/
-          cp installers/linux/make_self_extracting.sh linux_stage/
-          cd linux_stage
-          chmod +x install.sh make_self_extracting.sh
-          ./make_self_extracting.sh
 
-      - name: Rename output
-        run: |
-          TAG=${GITHUB_REF_NAME}
-          mv linux_stage/BitMorph_v*.run "BitMorph_${TAG}_Linux.run"
+          # Write install.sh inline
+          cat > linux_stage/install.sh << 'INSTALLEOF'
+#!/bin/bash
+set -euo pipefail
+APP_VERSION="__VERSION__"
+VST3_BUNDLE="BitMorph.vst3"
+PRESETS_DIR="Presets"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SILENT=false
+for arg in "$@"; do [ "$arg" = "--silent" ] && SILENT=true; done
+
+DEFAULT_VST3="${HOME}/.vst3"
+[ "$(id -u)" -eq 0 ] && DEFAULT_VST3="/usr/lib/vst3"
+
+if $SILENT; then
+  VST3_DEST="$DEFAULT_VST3"
+  PRESETS_DEST="${HOME}/Documents/JUCE Projects/BitMorph/Presets"
+else
+  echo "BitMorph v${APP_VERSION} Installer"
+  echo "VST3 install path [${DEFAULT_VST3}]: "
+  read -r VST3_DEST
+  VST3_DEST="${VST3_DEST:-$DEFAULT_VST3}"
+  echo "Presets path [${HOME}/Documents/JUCE Projects/BitMorph/Presets]: "
+  read -r PRESETS_DEST
+  PRESETS_DEST="${PRESETS_DEST:-${HOME}/Documents/JUCE Projects/BitMorph/Presets}"
+fi
+
+needs_sudo() { local d="$1"; while [ ! -e "$d" ]; do d="$(dirname "$d")"; done; [ ! -w "$d" ]; }
+
+echo "Installing VST3..."
+if needs_sudo "$VST3_DEST"; then
+  sudo mkdir -p "$VST3_DEST"
+  sudo cp -R "${SCRIPT_DIR}/${VST3_BUNDLE}" "${VST3_DEST}/BitMorph.vst3"
+else
+  mkdir -p "$VST3_DEST"
+  cp -R "${SCRIPT_DIR}/${VST3_BUNDLE}" "${VST3_DEST}/BitMorph.vst3"
+fi
+
+echo "Installing presets..."
+mkdir -p "$PRESETS_DEST"
+if command -v rsync &>/dev/null; then
+  rsync -a --ignore-existing "${SCRIPT_DIR}/${PRESETS_DIR}/" "${PRESETS_DEST}/"
+else
+  cp -Rn "${SCRIPT_DIR}/${PRESETS_DIR}/." "${PRESETS_DEST}/"
+fi
+
+echo "Done! Open your DAW, rescan plugins, and search for BitMorph."
+INSTALLEOF
+
+          sed -i "s/__VERSION__/$VERSION/" linux_stage/install.sh
+          chmod +x linux_stage/install.sh
+
+          # Build self-extracting archive
+          cd linux_stage
+          tar -czf ../payload.tar.gz .
+          cd ..
+
+          cat > stub.sh << 'STUBEOF'
+#!/bin/bash
+TMPDIR="$(mktemp -d)"
+ARCHIVE=$(awk '/^__ARCHIVE_BELOW__/{print NR + 1; exit 0;}' "$0")
+tail -n +"${ARCHIVE}" "$0" | tar -xz -C "${TMPDIR}"
+cd "${TMPDIR}"
+chmod +x install.sh
+./install.sh "$@"
+STATUS=$?
+cd /; rm -rf "${TMPDIR}"; exit $STATUS
+__ARCHIVE_BELOW__
+STUBEOF
+
+          cat stub.sh payload.tar.gz > "BitMorph_${TAG}_Linux.run"
+          chmod +x "BitMorph_${TAG}_Linux.run"
+          rm stub.sh payload.tar.gz
+
+      - name: Verify output
+        run: ls -lh BitMorph_*_Linux.run
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
