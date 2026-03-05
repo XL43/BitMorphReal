@@ -59,14 +59,12 @@ jobs:
           unzip -q juce.zip -d juce_extracted
           echo "JUCE_DIR=$(pwd)/juce_extracted/JUCE" >> $GITHUB_ENV
 
-      # Run the Projucer to (re)generate the VS solution with correct paths
       - name: Run Projucer
         shell: bash
         run: |
-          curl -L https://github.com/juce-framework/JUCE/releases/download/7.0.9/juce-7.0.9-windows.zip \
-            -o juce.zip
-          # Use Projucer from the JUCE download
           PROJUCER="${{ env.JUCE_DIR }}/Projucer.exe"
+          # Tell Projucer where JUCE modules are on this runner before resaving
+          "$PROJUCER" --set-global-search-path windows defaultJuceModulePath             "$(cygpath -w "${{ env.JUCE_DIR }}/modules")"
           "$PROJUCER" --resave BitMorph.jucer
 
       # Build with MSBuild (works with both VS2022 and VS2026 solutions)
@@ -147,6 +145,8 @@ jobs:
       - name: Run Projucer
         run: |
           PROJUCER="${{ env.JUCE_DIR }}/Projucer.app/Contents/MacOS/Projucer"
+          # Tell Projucer where JUCE modules are on this runner before resaving
+          "$PROJUCER" --set-global-search-path osx defaultJuceModulePath             "${{ env.JUCE_DIR }}/modules"
           "$PROJUCER" --resave BitMorph.jucer
 
       - name: Build VST3 (universal binary)
@@ -223,7 +223,10 @@ jobs:
       - name: Run Projucer
         run: |
           chmod +x "${{ env.JUCE_DIR }}/Projucer"
-          "${{ env.JUCE_DIR }}/Projucer" --resave BitMorph.jucer
+          PROJUCER="${{ env.JUCE_DIR }}/Projucer"
+          # Tell Projucer where JUCE modules are on this runner before resaving
+          "$PROJUCER" --set-global-search-path linux defaultJuceModulePath             "${{ env.JUCE_DIR }}/modules"
+          "$PROJUCER" --resave BitMorph.jucer
 
       - name: Build VST3
         run: |
