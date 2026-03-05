@@ -78,7 +78,6 @@ jobs:
             Builds\VisualStudio2026\BitMorph.sln ^
             /p:Configuration=Release ^
             /p:Platform=x64 ^
-            /t:BitMorph_VST3 ^
             /m
 
       - name: Find VST3
@@ -151,9 +150,14 @@ jobs:
 
       - name: Build VST3 (universal binary)
         run: |
+          XCODEPROJ=$(find Builds -name "*.xcodeproj" | head -1)
+          echo "Building: $XCODEPROJ"
+          # List available schemes so we can pick the right one
+          SCHEME=$(xcodebuild -project "$XCODEPROJ" -list 2>/dev/null | grep -i "VST3" | head -1 | xargs || echo "BitMorph - VST3")
+          echo "Using scheme: $SCHEME"
           xcodebuild \
-            -project "Builds/MacOSX/BitMorph.xcodeproj" \
-            -scheme "BitMorph - VST3" \
+            -project "$XCODEPROJ" \
+            -scheme "$SCHEME" \
             -configuration Release \
             ONLY_ACTIVE_ARCH=NO \
             ARCHS="arm64 x86_64" \
@@ -230,8 +234,10 @@ jobs:
 
       - name: Build VST3
         run: |
-          cd Builds/LinuxMakefile
-          make CONFIG=Release VST3=1 -j$(nproc)
+          MAKEDIR=$(find Builds -name "Makefile" -not -path "*/.*" | head -1 | xargs dirname)
+          echo "Building in: $MAKEDIR"
+          cd "$MAKEDIR"
+          make CONFIG=Release -j$(nproc)
 
       - name: Find VST3
         run: |
