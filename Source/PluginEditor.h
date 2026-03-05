@@ -33,6 +33,10 @@ public:
     // Icon buttons: name the button "dice", "xarr", or "star" to get custom drawing
     void drawButtonText(juce::Graphics&, juce::TextButton&,
         bool highlighted, bool down) override;
+
+    // Scales combo box text with the component's rendered height so it stays
+    // consistent with knob labels and section headers at any window size.
+    juce::Font getComboBoxFont(juce::ComboBox& box) override;
 };
 
 // ── Section panel with optional LED toggle ────────────────────────────────────
@@ -54,12 +58,18 @@ public:
     void paint(juce::Graphics& g) override
     {
         auto b = getLocalBounds();
+
         g.setColour(BG_PANEL);
         g.fillRoundedRectangle(b.toFloat(), 4.0f);
         g.setColour(BORDER_CLR);
         g.drawRoundedRectangle(b.toFloat().reduced(0.5f), 4.0f, 1.0f);
 
-        auto header = b.removeFromTop(22);
+        // Header height scales with the component — 22/185 ≈ 11.9% of design height
+        const int hh = juce::jmax(14, juce::roundToInt(getHeight() * (22.0f / 185.0f)));
+        const float ledSize = juce::jmax(6.0f, hh * 0.45f);
+        const float fontSize = juce::jmax(7.0f, hh * 0.50f);
+
+        auto header = b.removeFromTop(hh);
         g.setColour(BG_HEADER);
         g.fillRect(header);
 
@@ -69,18 +79,18 @@ public:
 
         if (showToggle)
         {
-            float dotX = (float)header.getX() + 8.0f;
-            float dotY = (float)header.getCentreY() - 5.0f;
-            if (enabled) { g.setColour(ACCENT.withAlpha(0.3f)); g.fillEllipse(dotX - 3, dotY - 3, 16, 16); g.setColour(ACCENT); }
+            float dotX = (float)header.getX() + hh * 0.36f;
+            float dotY = (float)header.getCentreY() - ledSize * 0.5f;
+            if (enabled) { g.setColour(ACCENT.withAlpha(0.3f)); g.fillEllipse(dotX - ledSize * 0.3f, dotY - ledSize * 0.3f, ledSize * 1.6f, ledSize * 1.6f); g.setColour(ACCENT); }
             else           g.setColour(juce::Colour(0xff252525));
-            g.fillEllipse(dotX, dotY, 10, 10);
+            g.fillEllipse(dotX, dotY, ledSize, ledSize);
             g.setColour(BORDER_CLR);
-            g.drawEllipse(dotX, dotY, 10, 10, 1.0f);
+            g.drawEllipse(dotX, dotY, ledSize, ledSize, 1.0f);
         }
 
         g.setColour(TEXT_LIGHT);
-        g.setFont(juce::Font(10.0f, juce::Font::bold));
-        int textX = showToggle ? header.getX() + 24 : header.getX() + 6;
+        g.setFont(juce::Font(fontSize, juce::Font::bold));
+        int textX = showToggle ? header.getX() + hh + 2 : header.getX() + 6;
         g.drawText(sectionTitle,
             juce::Rectangle<int>(textX, header.getY(),
                 header.getWidth() - textX - 4, header.getHeight()),
@@ -93,7 +103,14 @@ public:
         }
     }
 
-    void resized() override { if (showToggle) toggleBtn.setBounds(0, 0, 22, 22); }
+    void resized() override
+    {
+        if (showToggle)
+        {
+            int hh = juce::jmax(14, juce::roundToInt(getHeight() * (22.0f / 185.0f)));
+            toggleBtn.setBounds(0, 0, hh, hh);
+        }
+    }
 
     juce::ToggleButton toggleBtn;
 
@@ -127,6 +144,9 @@ public:
 
         juce::String prefix = stepPrefixForBank(activeBank);
 
+        // Scale step number font to grid height
+        const float labelFontSize = juce::jmax(6.0f, getHeight() * 0.065f);
+
         for (int i = 0; i < numSteps; ++i)
         {
             auto  stepID = prefix + juce::String(i);
@@ -158,9 +178,10 @@ public:
             }
 
             g.setColour(isCurrent ? ACCENT : juce::Colour(0xff333333));
-            g.setFont(8.0f);
-            g.drawText(juce::String(i + 1), (int)barX, (int)(bounds.getBottom() - 12),
-                (int)barW, 12, juce::Justification::centred);
+            g.setFont(labelFontSize);
+            float labelH = getHeight() * 0.14f;
+            g.drawText(juce::String(i + 1), (int)barX, (int)(bounds.getBottom() - labelH),
+                (int)barW, (int)labelH, juce::Justification::centred);
         }
 
         g.setColour(BORDER_CLR);
@@ -174,9 +195,9 @@ private:
     void setStepFromMouse(const juce::MouseEvent& e)
     {
         const float stepW = getWidth() / 16.0f;
-        int idx = juce::jlimit(0, 15, (int)(e.position.x / stepW));
+        int   idx = juce::jlimit(0, 15, (int)(e.position.x / stepW));
         float val = juce::jlimit(-1.0f, 1.0f, 1.0f - (e.position.y / getHeight()) * 2.0f);
-        auto stepID = stepPrefixForBank(activeBank) + juce::String(idx);
+        auto  stepID = stepPrefixForBank(activeBank) + juce::String(idx);
         if (auto* param = apvts.getParameter(stepID))
         {
             param->beginChangeGesture();
@@ -211,7 +232,7 @@ public:
     {
         if (stepSeqGrid == nullptr) return;
         stepSeqGrid->setCurrentStep(audioProcessor.getCurrentStepSeqStep());
-        int bank = static_cast<int> (
+        int bank = static_cast<int>(
             audioProcessor.apvts.getRawParameterValue(ParamID::STEP_SEQ_BANK)->load());
         stepSeqGrid->setActiveBank(bank);
         updateBankButtons(bank);
@@ -220,6 +241,17 @@ public:
 private:
     BitMorphAudioProcessor& audioProcessor;
     BitMorphLookAndFeel     lookAndFeel;
+
+    // ── Resize support ────────────────────────────────────────────────────────
+    // Design dimensions — all layout values are authored at this size and
+    // scaled proportionally when the window is resized.
+    static constexpr int DESIGN_W = 1200;
+    static constexpr int DESIGN_H = 720;
+
+    juce::ComponentBoundsConstrainer resizeConstrainer;
+
+    // Returns the uniform scale factor relative to the design width.
+    float sc() const { return (float)getWidth() / (float)DESIGN_W; }
 
     // ── Knob + label pair ─────────────────────────────────────────────────────
     struct KnobSet
@@ -236,15 +268,15 @@ private:
 
     // ── Section panels ────────────────────────────────────────────────────────
     SectionPanel quantizerPanel{ "QUANTIZER",   true };
-    SectionPanel drivePanel{ "DRIVE",       true };
-    SectionPanel resamplerPanel{ "RESAMPLER",   true };
-    SectionPanel filterPanel{ "FILTER",      false };
-    SectionPanel waveCrushPanel{ "WAVECRUSHER", true };
-    SectionPanel ringModPanel{ "RING MOD",    true };
-    SectionPanel noisePanel{ "NOISE",       true };
-    SectionPanel lfoPanel{ "LFO",         false };
-    SectionPanel stepSeqPanel{ "STEP SEQ",    true };
-    SectionPanel masterPanel{ "MASTER",      false };
+    SectionPanel drivePanel{ "DRIVE",        true };
+    SectionPanel resamplerPanel{ "RESAMPLER",    true };
+    SectionPanel filterPanel{ "FILTER",       false };
+    SectionPanel waveCrushPanel{ "WAVECRUSHER",  true };
+    SectionPanel ringModPanel{ "RING MOD",     true };
+    SectionPanel noisePanel{ "NOISE",        true };
+    SectionPanel lfoPanel{ "LFO",          false };
+    SectionPanel stepSeqPanel{ "STEP SEQ",     true };
+    SectionPanel masterPanel{ "MASTER",       false };
 
     // ── Quantizer ─────────────────────────────────────────────────────────────
     KnobSet            bitDepthKnob;
@@ -306,13 +338,13 @@ private:
     juce::Label        stepSeqTargetLabel{ {}, "Target" };
     juce::Label        stepSeqDirLabel{ {}, "Dir" };
     juce::Slider       stepSeqLenSlider{ juce::Slider::LinearHorizontal,
-                                            juce::Slider::TextBoxRight };
+                                               juce::Slider::TextBoxRight };
     juce::Label        stepSeqLenLabel{ {}, "Steps" };
     juce::TextButton   bankBtn1{ "1" };
     juce::TextButton   bankBtn2{ "2" };
     juce::TextButton   bankBtn3{ "3" };
     juce::TextButton   bankBtn4{ "4" };
-    juce::TextButton   randStepBtn{ "rand" };   // randomize step seq
+    juce::TextButton   randStepBtn{ "rand" };
     std::unique_ptr<StepSequencerGrid> stepSeqGrid;
 
     // ── Master ────────────────────────────────────────────────────────────────
@@ -324,19 +356,15 @@ private:
     struct PresetEntry { juce::String name, folderName; juce::File file; };
 
     juce::Array<PresetEntry> allPresets;
-    juce::StringArray        favorites;      // stores file paths of favourited presets
+    juce::StringArray        favorites;
     int currentPresetIndex = -1;
 
-    // Preset bar buttons
-    // "dice" name → dice icon drawn in drawButtonText
-    // "xarr" name → crossed arrows icon
-    // "star" name → star icon (favourite toggle)
     juce::TextButton presetPrevBtn{ "<" };
     juce::TextButton presetNextBtn{ ">" };
     juce::TextButton presetNameBtn{ "-- Init --" };
     juce::TextButton presetFaveBtn{ "*" };   // name = "star"
     juce::TextButton presetRandBtn{ "?" };   // name = "dice"
-    juce::TextButton presetRandParamBtn{ "~" };   // name = "xarr"
+    juce::TextButton presetRandParamBtn{ "~" };  // name = "xarr"
     juce::TextButton presetSaveBtn{ "Save" };
     juce::TextButton presetLoadBtn{ "Load" };
 
@@ -412,8 +440,6 @@ private:
         updateFaveButton();
     }
 
-    // Handles both APVTS native format (<PARAM id=... value=.../> children)
-    // and factory flat-attribute format (<BitMorphParams preampGain="0.0" .../>).
     void applyXmlPreset(const juce::File& file)
     {
         if (!file.existsAsFile()) return;
@@ -422,19 +448,16 @@ private:
 
         if (xml->getChildByName("PARAM") != nullptr)
         {
-            // Plugin-saved preset in APVTS native format
             auto state = juce::ValueTree::fromXml(*xml);
             if (state.isValid())
                 audioProcessor.apvts.replaceState(state);
         }
         else
         {
-            // Flat-attribute format used by all factory presets
             for (int i = 0; i < xml->getNumAttributes(); ++i)
             {
-                auto paramID = xml->getAttributeName(i);
+                auto  paramID = xml->getAttributeName(i);
                 float val = (float)xml->getDoubleAttribute(paramID, 0.0);
-
                 if (auto* p = dynamic_cast<juce::RangedAudioParameter*>(
                     audioProcessor.apvts.getParameter(paramID)))
                 {
@@ -458,7 +481,6 @@ private:
 
     void initializePreset()
     {
-        // Reset every parameter to its default value
         for (auto* param : audioProcessor.apvts.processor.getParameters())
         {
             param->beginChangeGesture();
@@ -475,13 +497,11 @@ private:
     {
         juce::PopupMenu menu, currentSub;
         juce::String    currentFolder;
-        int             itemID = 2;   // 1 reserved for Init
+        int             itemID = 2;
 
-        // Init option always at top
         menu.addItem(1, "-- Initialize --");
         menu.addSeparator();
 
-        // Favourites submenu
         if (favorites.size() > 0)
         {
             juce::PopupMenu favMenu;
@@ -513,19 +533,16 @@ private:
                 if (r == 1) { initializePreset(); return; }
                 if (r >= 2)
                 {
-                    // Map back: first count favs to skip them in the main list
                     int favCount = 0;
                     if (favorites.size() > 0)
                         for (auto& p : allPresets)
                             if (favorites.contains(p.file.getFullPathName())) ++favCount;
 
-                    // r=2 starts the fav entries, then after favCount comes main list
                     int favStart = 2;
                     int mainStart = favStart + favCount;
 
                     if (favorites.size() > 0 && r >= favStart && r < mainStart)
                     {
-                        // It's a favourite — find which one
                         int favIdx = r - favStart;
                         int count = 0;
                         for (int i = 0; i < allPresets.size(); ++i)
@@ -554,12 +571,10 @@ private:
                 if (result == juce::File{}) return;
                 auto file = result.withFileExtension(".xml");
 
-                // Write flat-attribute format: <BitMorphParams param="val" .../>
-                // This matches factory preset format and loads via applyXmlPreset.
                 juce::XmlElement xml("BitMorphParams");
                 for (auto* rawParam : audioProcessor.apvts.processor.getParameters())
                 {
-                    if (auto* p = dynamic_cast<juce::RangedAudioParameter*> (rawParam))
+                    if (auto* p = dynamic_cast<juce::RangedAudioParameter*>(rawParam))
                         xml.setAttribute(p->getParameterID(),
                             (double)p->convertFrom0to1(p->getValue()));
                 }
@@ -583,14 +598,13 @@ private:
         juce::Random rng;
         for (auto* rawParam : audioProcessor.apvts.processor.getParameters())
         {
-            auto* param = dynamic_cast<juce::RangedAudioParameter*> (rawParam);
+            auto* param = dynamic_cast<juce::RangedAudioParameter*>(rawParam);
             if (param == nullptr) continue;
 
             auto id = param->getParameterID();
 
             if (id == ParamID::PREAMP_GAIN)
             {
-                // Clamp to 0 – 5 dB
                 float safeVal = rng.nextFloat() * 5.0f;
                 param->beginChangeGesture();
                 param->setValueNotifyingHost(param->convertTo0to1(safeVal));
@@ -598,7 +612,6 @@ private:
             }
             else if (id == ParamID::OUTPUT_VOLUME)
             {
-                // Clamp to -5 – +5 dB
                 float safeVal = (rng.nextFloat() * 10.0f) - 5.0f;
                 param->beginChangeGesture();
                 param->setValueNotifyingHost(param->convertTo0to1(safeVal));
@@ -620,7 +633,7 @@ private:
     void randomizeStepSeq()
     {
         juce::Random rng;
-        int bank = static_cast<int> (
+        int  bank = static_cast<int>(
             audioProcessor.apvts.getRawParameterValue(ParamID::STEP_SEQ_BANK)->load());
         auto prefix = stepPrefixForBank(bank);
         for (int i = 0; i < 16; ++i)
@@ -629,9 +642,7 @@ private:
             if (auto* param = audioProcessor.apvts.getParameter(stepID))
             {
                 param->beginChangeGesture();
-                // Random value biased toward positive range
-                float v = rng.nextFloat();
-                param->setValueNotifyingHost(v);
+                param->setValueNotifyingHost(rng.nextFloat());
                 param->endChangeGesture();
             }
         }

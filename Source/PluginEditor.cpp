@@ -17,7 +17,6 @@ BitMorphLookAndFeel::BitMorphLookAndFeel()
     setColour(juce::PopupMenu::highlightedBackgroundColourId, ACCENT);
     setColour(juce::Label::textColourId, TEXT_MUTED);
 
-    // Linear slider colours (orange thumb / track, dark background)
     setColour(juce::Slider::thumbColourId, ACCENT);
     setColour(juce::Slider::trackColourId, ACCENT);
     setColour(juce::Slider::backgroundColourId, juce::Colour(0xff1a1a1a));
@@ -67,14 +66,16 @@ void BitMorphLookAndFeel::drawToggleButton(juce::Graphics& g,
     juce::ToggleButton& button,
     bool, bool)
 {
-    const float ledSize = 10.0f;
-    const float ledX = 6.0f;
+    // LED size is relative to the button's own height so it scales cleanly
+    const float ledSize = button.getHeight() * 0.55f;
+    const float ledX = button.getHeight() * 0.3f;
     const float ledY = (button.getHeight() - ledSize) * 0.5f;
 
     if (button.getToggleState())
     {
         g.setColour(ACCENT.withAlpha(0.3f));
-        g.fillEllipse(ledX - 4, ledY - 4, ledSize + 8, ledSize + 8);
+        g.fillEllipse(ledX - ledSize * 0.35f, ledY - ledSize * 0.35f,
+            ledSize * 1.7f, ledSize * 1.7f);
         g.setColour(ACCENT);
     }
     else { g.setColour(juce::Colour(0xff252525)); }
@@ -83,10 +84,10 @@ void BitMorphLookAndFeel::drawToggleButton(juce::Graphics& g,
     g.setColour(BORDER_CLR);
     g.drawEllipse(ledX, ledY, ledSize, ledSize, 1.0f);
     g.setColour(button.getToggleState() ? TEXT_LIGHT : TEXT_MUTED);
-    g.setFont(10.0f);
+    g.setFont(juce::jmax(7.0f, button.getHeight() * 0.55f));
     g.drawText(button.getButtonText(),
-        (int)(ledX + ledSize + 5), 0,
-        button.getWidth() - (int)(ledX + ledSize + 5), button.getHeight(),
+        (int)(ledX + ledSize + 4), 0,
+        button.getWidth() - (int)(ledX + ledSize + 4), button.getHeight(),
         juce::Justification::centredLeft);
 }
 
@@ -100,19 +101,16 @@ void BitMorphLookAndFeel::drawLinearSlider(juce::Graphics& g,
     if (style == juce::Slider::LinearHorizontal)
     {
         float trackY = y + height * 0.5f;
-        float trackH = 3.0f;
+        float trackH = juce::jmax(2.0f, height * 0.2f);
 
-        // Track background
         g.setColour(juce::Colour(0xff1a1a1a));
         g.fillRoundedRectangle((float)x, trackY - trackH * 0.5f, (float)width, trackH, 1.5f);
 
-        // Filled portion
         g.setColour(ACCENT);
         g.fillRoundedRectangle((float)x, trackY - trackH * 0.5f,
             sliderPos - (float)x, trackH, 1.5f);
 
-        // Thumb
-        float thumbR = 7.0f;
+        float thumbR = juce::jmax(4.0f, height * 0.4f);
         g.setColour(ACCENT);
         g.fillEllipse(sliderPos - thumbR, trackY - thumbR, thumbR * 2.0f, thumbR * 2.0f);
         g.setColour(BORDER_CLR);
@@ -129,8 +127,8 @@ void BitMorphLookAndFeel::drawButtonText(juce::Graphics& g,
     juce::TextButton& button,
     bool isHighlighted, bool isDown)
 {
-    auto name = button.getName();
-    auto bounds = button.getLocalBounds().toFloat();
+    auto  name = button.getName();
+    auto  bounds = button.getLocalBounds().toFloat();
     float cx = bounds.getCentreX();
     float cy = bounds.getCentreY();
     float s = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.52f;
@@ -141,32 +139,26 @@ void BitMorphLookAndFeel::drawButtonText(juce::Graphics& g,
 
     if (name == "dice")
     {
-        // Draw a simple dice face (square + dots)
         float sz = s * 0.85f;
         juce::Rectangle<float> face(cx - sz * 0.5f, cy - sz * 0.5f, sz, sz);
         g.drawRoundedRectangle(face, 2.0f, 1.5f);
         float d = sz * 0.22f;
         float r = sz * 0.11f;
-        // 5-dot pattern
         auto dot = [&](float dx, float dy) { g.fillEllipse(cx + dx - r, cy + dy - r, r * 2, r * 2); };
         dot(-d, -d); dot(d, -d);
         dot(0, 0);
-        dot(-d, d); dot(d, d);
+        dot(-d, d);  dot(d, d);
     }
     else if (name == "xarr")
     {
-        // Draw crossed arrows (shuffle icon)
         float hs = s * 0.38f;
-        float ah = s * 0.18f;   // arrowhead half-width
-        g.setColour(col);
-        // Arrow 1: top-left → bottom-right
+        float ah = s * 0.18f;
         g.drawLine(cx - hs, cy - hs, cx + hs, cy + hs, 1.5f);
         juce::Path head1;
         head1.addTriangle(cx + hs, cy + hs,
             cx + hs - ah, cy + hs - ah * 0.3f,
             cx + hs - ah * 0.3f, cy + hs - ah);
         g.fillPath(head1);
-        // Arrow 2: bottom-left → top-right
         g.drawLine(cx - hs, cy + hs, cx + hs, cy - hs, 1.5f);
         juce::Path head2;
         head2.addTriangle(cx + hs, cy - hs,
@@ -176,14 +168,14 @@ void BitMorphLookAndFeel::drawButtonText(juce::Graphics& g,
     }
     else if (name == "star")
     {
-        // Draw a 5-point star
         juce::Path star;
         const int pts = 5;
-        float outerR = s * 0.5f;
-        float innerR = s * 0.22f;
+        float     outerR = s * 0.5f;
+        float     innerR = s * 0.22f;
         for (int i = 0; i < pts * 2; ++i)
         {
-            float angle = juce::MathConstants<float>::pi * i / pts - juce::MathConstants<float>::halfPi;
+            float angle = juce::MathConstants<float>::pi * i / pts
+                - juce::MathConstants<float>::halfPi;
             float r2 = (i % 2 == 0) ? outerR : innerR;
             float px = cx + r2 * std::cos(angle);
             float py = cy + r2 * std::sin(angle);
@@ -195,7 +187,6 @@ void BitMorphLookAndFeel::drawButtonText(juce::Graphics& g,
     }
     else if (name == "randstep")
     {
-        // Dice with a small musical note hint — just use two dots + staff lines
         float sz = s * 0.8f;
         g.drawRoundedRectangle(cx - sz * 0.5f, cy - sz * 0.5f, sz, sz, 2.0f, 1.5f);
         float r = sz * 0.1f;
@@ -205,11 +196,18 @@ void BitMorphLookAndFeel::drawButtonText(juce::Graphics& g,
     }
     else
     {
-        // Default: draw the button text normally
-        g.setFont(juce::Font(juce::jmin(bounds.getHeight() * 0.65f, 12.0f)));
+        // No font cap — size scales with the button's own height
+        g.setFont(juce::Font(bounds.getHeight() * 0.60f));
         g.drawFittedText(button.getButtonText(),
             button.getLocalBounds(), juce::Justification::centred, 1);
     }
+}
+
+juce::Font BitMorphLookAndFeel::getComboBoxFont(juce::ComboBox& box)
+{
+    // Scales with the combo's rendered height so text stays proportional
+    // to knob labels and section headers at any window size.
+    return juce::Font(juce::jmax(9.0f, box.getHeight() * 0.58f));
 }
 
 // =============================================================================
@@ -217,6 +215,8 @@ void BitMorphLookAndFeel::drawButtonText(juce::Graphics& g,
 // =============================================================================
 void BitMorphAudioProcessorEditor::setupKnob(KnobSet& k, const juce::String& labelText)
 {
+    // Font sizes are set to a neutral default here; placeKnobAt() updates them
+    // each time resized() runs so they always match the current scale.
     k.knob.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 64, 16);
     k.label.setText(labelText, juce::dontSendNotification);
     k.label.setJustificationType(juce::Justification::centred);
@@ -228,9 +228,19 @@ void BitMorphAudioProcessorEditor::setupKnob(KnobSet& k, const juce::String& lab
 
 void BitMorphAudioProcessorEditor::placeKnobAt(KnobSet& k, int x, int y, int w)
 {
-    int kx = x + (w - 54) / 2;
-    k.knob.setBounds(kx, y, 54, 54);
-    k.label.setBounds(x, y + 56, w, 14);
+    const float s = sc();
+    const int   kSz = juce::jmax(20, (int)(54.0f * s));   // knob diameter, min 20 px
+    const int   lblH = juce::jmax(10, (int)(14.0f * s));
+    const int   txH = juce::jmax(12, (int)(16.0f * s));
+
+    int kx = x + (w - kSz) / 2;
+    int kGap = juce::jmax(1, (int)(2.0f * s));   // small gap between knob bounds and label
+    k.knob.setBounds(kx, y, kSz, kSz);
+    k.knob.setTextBoxStyle(juce::Slider::TextBoxBelow, false, kSz, txH);
+    // The text box is rendered INSIDE kSz×kSz by JUCE, so the label goes just
+    // below the slider bounds — not below bounds+txH, which was 16px too low.
+    k.label.setBounds(x, y + kSz + kGap, w, lblH);
+    k.label.setFont(juce::jmax(7.0f, 11.0f * s));
 }
 
 void BitMorphAudioProcessorEditor::setupCombo(juce::ComboBox& combo,
@@ -256,6 +266,13 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     setLookAndFeel(&lookAndFeel);
     auto& apvts = audioProcessor.apvts;
 
+    // ── Resize setup ──────────────────────────────────────────────────────────
+    // Aspect ratio locked to 5:3 (1200×720). Min 50%, max 200% of design size.
+    resizeConstrainer.setFixedAspectRatio((double)DESIGN_W / (double)DESIGN_H);
+    resizeConstrainer.setMinimumSize(600, 360);
+    resizeConstrainer.setMaximumSize(2400, 1440);
+    setResizable(true, &resizeConstrainer);
+
     loadFavorites();
 
     // ── Preset bar ────────────────────────────────────────────────────────────
@@ -273,7 +290,6 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     styleBtn(presetRandParamBtn, juce::Colour(0xff1a1a1a), ACCENT);
     styleBtn(presetFaveBtn, juce::Colour(0xff1a1a1a), TEXT_MUTED);
 
-    // Name buttons so drawButtonText can draw icons
     presetRandBtn.setName("dice");
     presetRandParamBtn.setName("xarr");
     presetFaveBtn.setName("star");
@@ -433,7 +449,6 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     addAndMakeVisible(stepSeqLenLabel);
     addAndMakeVisible(stepSeqLenSlider);
 
-    // Bank buttons
     auto styleBankBtn = [&](juce::TextButton& btn, int idx)
         {
             btn.setColour(juce::TextButton::buttonColourId,
@@ -449,7 +464,6 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     bankBtn3.onClick = [this] { selectBank(2); };
     bankBtn4.onClick = [this] { selectBank(3); };
 
-    // Randomize step seq button
     randStepBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff1a1a1a));
     randStepBtn.setColour(juce::TextButton::textColourOffId, ACCENT);
     randStepBtn.onClick = [this] { randomizeStepSeq(); };
@@ -474,7 +488,7 @@ BitMorphAudioProcessorEditor::BitMorphAudioProcessorEditor(BitMorphAudioProcesso
     fxMixAtt = std::make_unique<SliderAtt>(apvts, ParamID::FX_MIX, fxMixKnob.knob);
     outputVolumeAtt = std::make_unique<SliderAtt>(apvts, ParamID::OUTPUT_VOLUME, outputVolumeKnob.knob);
 
-    setSize(1200, 840);
+    setSize(DESIGN_W, DESIGN_H);   // 1200×720
 }
 
 BitMorphAudioProcessorEditor::~BitMorphAudioProcessorEditor()
@@ -485,70 +499,95 @@ BitMorphAudioProcessorEditor::~BitMorphAudioProcessorEditor()
 }
 
 // =============================================================================
-//  Paint
+//  Paint  —  all values multiplied by sc() so they track window size
 // =============================================================================
 void BitMorphAudioProcessorEditor::paint(juce::Graphics& g)
 {
+    const float s = sc();
+
     g.fillAll(BG_DARK);
 
     // Title bar
     g.setColour(juce::Colour(0xff080808));
-    g.fillRect(0, 0, getWidth(), 60);
+    g.fillRect(0, 0, getWidth(), (int)(60 * s));
 
-    // Orange accent line
+    // Orange accent line under header
     g.setColour(ACCENT);
-    g.fillRect(0, 58, getWidth(), 2);
+    g.fillRect(0, (int)(58 * s), getWidth(), juce::jmax(1, (int)(2 * s)));
 
     // Logo
     g.setColour(TEXT_LIGHT);
-    g.setFont(juce::Font(20.0f, juce::Font::bold));
-    g.drawText("BITMORPH", 16, 0, 200, 58, juce::Justification::centredLeft);
+    g.setFont(juce::Font(20.0f * s, juce::Font::bold));
+    g.drawText("BITMORPH", (int)(16 * s), 0, (int)(200 * s), (int)(58 * s),
+        juce::Justification::centredLeft);
 
     // Orange dot accent after logo
     g.setColour(ACCENT);
-    g.fillEllipse(122, 26, 6, 6);
+    g.fillEllipse(122.0f * s, 26.0f * s, 6.0f * s, 6.0f * s);
 
     // Subtitle
     g.setColour(TEXT_MUTED);
-    g.setFont(9.0f);
-    g.drawText("evrshade 2026", 0, 0, getWidth() - 14, 58,
+    g.setFont(9.0f * s);
+    g.drawText("evrshade 2026", 0, 0, getWidth() - (int)(14 * s), (int)(58 * s),
         juce::Justification::centredRight);
 
     // Preset bar background strip
     g.setColour(juce::Colour(0xff050505));
-    g.fillRect(0, 40, getWidth(), 20);
+    g.fillRect(0, (int)(40 * s), getWidth(), (int)(20 * s));
 }
 
 // =============================================================================
-//  Resized  –  4-4-1-1 layout
+//  Resized  —  4-4-1-1 layout, every constant multiplied by sc()
 // =============================================================================
 void BitMorphAudioProcessorEditor::resized()
 {
-    const int W = getWidth();
-    const int GAP = 3;
-    const int HEADERH = 60;
-    const int ROW1H = 185;
-    const int ROW2H = 185;
-    const int SEQH = 210;
-    const int MASTERH = 115;
+    const float s = sc();
+    const int   W = getWidth();
+
+    // ── Scaled layout constants ───────────────────────────────────────────────
+    const int GAP = juce::jmax(1, (int)(3 * s));
+    const int HEADERH = (int)(60 * s);
+    const int ROW1H = (int)(170 * s);   // was 185 — trimmed to fit DESIGN_H=720
+    const int ROW2H = (int)(170 * s);
+    const int SEQH = (int)(196 * s);   // was 210
+    const int MASTERH = (int)(112 * s);   // was 115
+    // Sanity: 170+170+196+112 = 648; 60+648+4*3 = 720 == DESIGN_H ✓
+
+    // Scaled inner-panel offsets (authored at 1x)
+    const int M = (int)(6 * s);   // margin from panel edge
+    const int HO = (int)(28 * s);   // top of controls inside panel (header + gap)
+    const int BK = (int)(74 * s);   // y below knobs for combos / toggles
+    const int CH = (int)(22 * s);   // combo / toggle row height
+    const int LH = (int)(18 * s);   // label / small control height
+
+    // Scaled combo-label column width
+    const int CL38 = (int)(38 * s);
+    const int CL46 = (int)(46 * s);
+    const int CL36 = (int)(36 * s);
 
     // ── Preset bar ────────────────────────────────────────────────────────────
     {
-        int y = 40, h = 18, bw = 22, bbw = 44;
+        int y = (int)(40 * s);
+        int h = (int)(18 * s);
+        int bw = (int)(22 * s);
+        int bbw = (int)(44 * s);
+
         presetPrevBtn.setBounds(4, y, bw, h);
         presetNextBtn.setBounds(4 + bw + 2, y, bw, h);
         presetFaveBtn.setBounds(4 + bw * 2 + 4, y, bw, h);
-        presetNameBtn.setBounds(4 + bw * 3 + 6, y, W - (4 + bw * 3 + 6) - bbw * 3 - 26, h);
-        presetRandBtn.setBounds(W - bbw * 3 - 22, y, bw, h);
-        presetRandParamBtn.setBounds(W - bbw * 3 - 22 + bw + 2, y, bw, h);
-        presetSaveBtn.setBounds(W - bbw * 2 - 2, y, bbw, h);
-        presetLoadBtn.setBounds(W - bbw, y, bbw, h);
+        presetNameBtn.setBounds(4 + bw * 3 + 6, y,
+            W - (4 + bw * 3 + 6) - bbw * 3 - (int)(26 * s), h);
+        presetRandBtn.setBounds(W - bbw * 3 - (int)(22 * s), y, bw, h);
+        presetRandParamBtn.setBounds(W - bbw * 3 - (int)(22 * s) + bw + 2, y, bw, h);
+        presetSaveBtn.setBounds(W - bbw * 2 - (int)(8 * s), y, bbw, h);
+        presetLoadBtn.setBounds(W - bbw - (int)(6 * s), y, bbw, h);
     }
 
     // ── Row 1: QUANTIZER | DRIVE | RESAMPLER | FILTER ────────────────────────
     {
-        int r1y = HEADERH + GAP;
-        int pw = W / 4;
+        const int r1y = HEADERH + GAP;
+        const int pw = W / 4;
+
         quantizerPanel.setBounds(juce::Rectangle<int>(pw * 0, r1y, pw, ROW1H).reduced(GAP));
         drivePanel.setBounds(juce::Rectangle<int>(pw * 1, r1y, pw, ROW1H).reduced(GAP));
         resamplerPanel.setBounds(juce::Rectangle<int>(pw * 2, r1y, pw, ROW1H).reduced(GAP));
@@ -557,56 +596,64 @@ void BitMorphAudioProcessorEditor::resized()
         // Quantizer
         {
             auto b = quantizerPanel.getBounds();
-            int  ix = b.getX() + 6;   int  iy = b.getY() + 28;
-            int  kw = (b.getWidth() - 12) / 2;
+            int  ix = b.getX() + M;
+            int  iy = b.getY() + HO;
+            int  kw = (b.getWidth() - M * 2) / 2;
             placeKnobAt(bitDepthKnob, ix, iy, kw);
             placeKnobAt(ditheringKnob, ix + kw, iy, kw);
-            dcShiftBtn.setBounds(ix, iy + 74, b.getWidth() - 12, 18);
+            dcShiftBtn.setBounds(ix, iy + BK, b.getWidth() - M * 2, LH);
         }
         // Drive
         {
             auto b = drivePanel.getBounds();
-            int  ix = b.getX() + 6;   int  iy = b.getY() + 28;
-            int  kw = (b.getWidth() - 12) / 3;
-            int  fw = b.getWidth() - 12;
+            int  ix = b.getX() + M;
+            int  iy = b.getY() + HO;
+            int  fw = b.getWidth() - M * 2;
+            int  kw = fw / 3;
             placeKnobAt(driveAmountKnob, ix, iy, kw);
             placeKnobAt(driveBiasKnob, ix + kw, iy, kw);
             placeKnobAt(driveMixKnob, ix + kw * 2, iy, kw);
-            driveModeLabel.setBounds(ix, iy + 74, 38, 22);
-            driveModeCombo.setBounds(ix + 38, iy + 74, fw - 38, 22);
+            driveModeLabel.setBounds(ix, iy + BK, CL38, CH);
+            driveModeCombo.setBounds(ix + CL38, iy + BK, fw - CL38, CH);
+            driveModeLabel.setFont(juce::jmax(7.0f, 10.0f * s));
         }
         // Resampler
         {
             auto b = resamplerPanel.getBounds();
-            int  ix = b.getX() + 6;   int  iy = b.getY() + 28;
-            int  kw = (b.getWidth() - 12) / 4;
-            int  fw = b.getWidth() - 12;
+            int  ix = b.getX() + M;
+            int  iy = b.getY() + HO;
+            int  fw = b.getWidth() - M * 2;
+            int  kw = fw / 4;
             placeKnobAt(resampleFreqKnob, ix, iy, kw);
             placeKnobAt(approxDeviationKnob, ix + kw, iy, kw);
             placeKnobAt(imagesShiftKnob, ix + kw * 2, iy, kw);
             placeKnobAt(jitterKnob, ix + kw * 3, iy, kw);
-            approxOnBtn.setBounds(ix, iy + 74, fw, 16);
-            imagesOnBtn.setBounds(ix, iy + 74 + 20, fw, 16);
+            approxOnBtn.setBounds(ix, iy + BK, fw, LH);
+            imagesOnBtn.setBounds(ix, iy + BK + (int)(20 * s), fw, LH);
         }
         // Filter
         {
             auto b = filterPanel.getBounds();
-            int  ix = b.getX() + 6;   int  iy = b.getY() + 28;
-            int  kw = (b.getWidth() - 12) / 2;
-            int  fw = b.getWidth() - 12;
+            int  ix = b.getX() + M;
+            int  iy = b.getY() + HO;
+            int  fw = b.getWidth() - M * 2;
+            int  kw = fw / 2;
             placeKnobAt(filterCutoffKnob, ix, iy, kw);
             placeKnobAt(filterResonanceKnob, ix + kw, iy, kw);
-            filterTypeLabel.setBounds(ix, iy + 74, 38, 22);
-            filterTypeCombo.setBounds(ix + 38, iy + 74, fw - 38, 22);
-            filterOrderLabel.setBounds(ix, iy + 74 + 26, 38, 22);
-            filterOrderCombo.setBounds(ix + 38, iy + 74 + 26, fw - 38, 22);
+            filterTypeLabel.setBounds(ix, iy + BK, CL38, CH);
+            filterTypeCombo.setBounds(ix + CL38, iy + BK, fw - CL38, CH);
+            filterOrderLabel.setBounds(ix, iy + BK + (int)(26 * s), CL38, CH);
+            filterOrderCombo.setBounds(ix + CL38, iy + BK + (int)(26 * s), fw - CL38, CH);
+            filterTypeLabel.setFont(juce::jmax(7.0f, 10.0f * s));
+            filterOrderLabel.setFont(juce::jmax(7.0f, 10.0f * s));
         }
     }
 
     // ── Row 2: WAVECRUSHER | RING MOD | NOISE | LFO ──────────────────────────
     {
-        int r2y = HEADERH + GAP + ROW1H + GAP;
-        int pw = W / 4;
+        const int r2y = HEADERH + GAP + ROW1H + GAP;
+        const int pw = W / 4;
+
         waveCrushPanel.setBounds(juce::Rectangle<int>(pw * 0, r2y, pw, ROW2H).reduced(GAP));
         ringModPanel.setBounds(juce::Rectangle<int>(pw * 1, r2y, pw, ROW2H).reduced(GAP));
         noisePanel.setBounds(juce::Rectangle<int>(pw * 2, r2y, pw, ROW2H).reduced(GAP));
@@ -615,97 +662,110 @@ void BitMorphAudioProcessorEditor::resized()
         // WaveCrusher
         {
             auto b = waveCrushPanel.getBounds();
-            int  ix = b.getX() + 6;   int  iy = b.getY() + 28;
-            int  fw = b.getWidth() - 12;
+            int  ix = b.getX() + M;
+            int  iy = b.getY() + HO;
+            int  fw = b.getWidth() - M * 2;
             placeKnobAt(waveCrushAmountKnob, ix, iy, fw);
-            waveCrushModeLabel.setBounds(ix, iy + 74, 38, 22);
-            waveCrushModeCombo.setBounds(ix + 38, iy + 74, fw - 38, 22);
+            waveCrushModeLabel.setBounds(ix, iy + BK, CL38, CH);
+            waveCrushModeCombo.setBounds(ix + CL38, iy + BK, fw - CL38, CH);
+            waveCrushModeLabel.setFont(juce::jmax(7.0f, 10.0f * s));
         }
         // Ring Mod
         {
             auto b = ringModPanel.getBounds();
-            int  ix = b.getX() + 6;   int  iy = b.getY() + 28;
-            int  kw = (b.getWidth() - 12) / 2;
+            int  ix = b.getX() + M;
+            int  iy = b.getY() + HO;
+            int  kw = (b.getWidth() - M * 2) / 2;
             placeKnobAt(ringModFreqKnob, ix, iy, kw);
             placeKnobAt(ringModMixKnob, ix + kw, iy, kw);
         }
         // Noise
         {
             auto b = noisePanel.getBounds();
-            int  ix = b.getX() + 6;   int  iy = b.getY() + 28;
-            int  kw = (b.getWidth() - 12) / 2;
-            int  fw = b.getWidth() - 12;
+            int  ix = b.getX() + M;
+            int  iy = b.getY() + HO;
+            int  fw = b.getWidth() - M * 2;
+            int  kw = fw / 2;
             placeKnobAt(noiseAmountKnob, ix, iy, kw);
             placeKnobAt(noiseColourKnob, ix + kw, iy, kw);
-            noiseTypeLabel.setBounds(ix, iy + 74, 38, 22);
-            noiseTypeCombo.setBounds(ix + 38, iy + 74, fw - 38, 22);
+            noiseTypeLabel.setBounds(ix, iy + BK, CL38, CH);
+            noiseTypeCombo.setBounds(ix + CL38, iy + BK, fw - CL38, CH);
+            noiseTypeLabel.setFont(juce::jmax(7.0f, 10.0f * s));
         }
         // LFO
         {
             auto b = lfoPanel.getBounds();
-            int  ix = b.getX() + 6;   int  iy = b.getY() + 28;
-            int  kw = (b.getWidth() - 12) / 2;
-            int  fw = b.getWidth() - 12;
+            int  ix = b.getX() + M;
+            int  iy = b.getY() + HO;
+            int  fw = b.getWidth() - M * 2;
+            int  kw = fw / 2;
             placeKnobAt(lfoRateKnob, ix, iy, kw);
             placeKnobAt(lfoDepthKnob, ix + kw, iy, kw);
-            lfoWaveformLabel.setBounds(ix, iy + 74, 46, 22);
-            lfoWaveformCombo.setBounds(ix + 46, iy + 74, fw - 46, 22);
-            lfoTargetLabel.setBounds(ix, iy + 74 + 26, 46, 22);
-            lfoTargetCombo.setBounds(ix + 46, iy + 74 + 26, fw - 46, 22);
+            lfoWaveformLabel.setBounds(ix, iy + BK, CL46, CH);
+            lfoWaveformCombo.setBounds(ix + CL46, iy + BK, fw - CL46, CH);
+            lfoTargetLabel.setBounds(ix, iy + BK + (int)(26 * s), CL46, CH);
+            lfoTargetCombo.setBounds(ix + CL46, iy + BK + (int)(26 * s), fw - CL46, CH);
+            lfoWaveformLabel.setFont(juce::jmax(7.0f, 10.0f * s));
+            lfoTargetLabel.setFont(juce::jmax(7.0f, 10.0f * s));
         }
     }
 
     // ── Row 3: STEP SEQ ───────────────────────────────────────────────────────
     {
-        int r3y = HEADERH + GAP + ROW1H + GAP + ROW2H + GAP;
-        int ctrlW = 185;
+        const int r3y = HEADERH + GAP + ROW1H + GAP + ROW2H + GAP;
+        const int ctrlW = (int)(185 * s);
 
         stepSeqPanel.setBounds(GAP, r3y, W - GAP * 2, SEQH);
         auto b = stepSeqPanel.getBounds();
-        int  ix = b.getX() + 6;
-        int  iy = b.getY() + 28;
+        int  ix = b.getX() + M;
+        int  iy = b.getY() + HO;
         int  kw = ctrlW / 3;
 
         placeKnobAt(stepSeqRateKnob, ix, iy, kw);
         placeKnobAt(stepSeqDepthKnob, ix + kw, iy, kw);
         placeKnobAt(stepSeqSwingKnob, ix + kw * 2, iy, kw);
 
-        int cy = iy + 75;
-        stepSeqTargetLabel.setBounds(ix, cy, 36, 20);
-        stepSeqTargetCombo.setBounds(ix + 36, cy, ctrlW - 36, 20);
-        stepSeqDirLabel.setBounds(ix, cy + 24, 36, 20);
-        stepSeqDirCombo.setBounds(ix + 36, cy + 24, ctrlW - 36, 20);
+        int cy = iy + (int)(70 * s);   // was 75 — tightened for SEQH=196
+        stepSeqTargetLabel.setBounds(ix, cy, CL36, (int)(20 * s));
+        stepSeqTargetCombo.setBounds(ix + CL36, cy, ctrlW - CL36, (int)(20 * s));
+        stepSeqDirLabel.setBounds(ix, cy + (int)(24 * s), CL36, (int)(20 * s));
+        stepSeqDirCombo.setBounds(ix + CL36, cy + (int)(24 * s), ctrlW - CL36, (int)(20 * s));
+        stepSeqTargetLabel.setFont(juce::jmax(7.0f, 10.0f * s));
+        stepSeqDirLabel.setFont(juce::jmax(7.0f, 10.0f * s));
 
-        int sliderY = cy + 50;
-        stepSeqLenLabel.setBounds(ix, sliderY, 36, 18);
-        stepSeqLenSlider.setBounds(ix + 36, sliderY, ctrlW - 36, 18);
+        int sliderY = cy + (int)(50 * s);
+        int tboxW = juce::jmax(20, (int)(28 * s));
+        int tboxH = juce::jmax(12, (int)(18 * s));
+        stepSeqLenLabel.setBounds(ix, sliderY, CL36, tboxH);
+        stepSeqLenSlider.setBounds(ix + CL36, sliderY, ctrlW - CL36, tboxH);
+        stepSeqLenSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, tboxW, tboxH);
+        stepSeqLenLabel.setFont(juce::jmax(7.0f, 10.0f * s));
 
-        // Bank buttons + rand step button in one row
-        int bankY = sliderY + 24;
-        int bw = (ctrlW - 22) / 4;
-        bankBtn1.setBounds(ix, bankY, bw - 2, 18);
-        bankBtn2.setBounds(ix + bw, bankY, bw - 2, 18);
-        bankBtn3.setBounds(ix + bw * 2, bankY, bw - 2, 18);
-        bankBtn4.setBounds(ix + bw * 3, bankY, bw - 2, 18);
-        randStepBtn.setBounds(ix + bw * 4, bankY, 20, 18);
+        int bankY = sliderY + (int)(24 * s);
+        int bw = (ctrlW - (int)(22 * s)) / 4;
+        bankBtn1.setBounds(ix, bankY, bw - 2, LH);
+        bankBtn2.setBounds(ix + bw, bankY, bw - 2, LH);
+        bankBtn3.setBounds(ix + bw * 2, bankY, bw - 2, LH);
+        bankBtn4.setBounds(ix + bw * 3, bankY, bw - 2, LH);
+        randStepBtn.setBounds(ix + bw * 4, bankY, (int)(20 * s), LH);
 
         // Grid
-        int gx = b.getX() + 6 + ctrlW + 8;
-        int gy = b.getY() + 26;
-        int gw = b.getWidth() - 12 - ctrlW - 8;
-        int gh = b.getHeight() - 32;
+        int gx = b.getX() + M + ctrlW + (int)(8 * s);
+        int gy = b.getY() + (int)(26 * s);
+        int gw = b.getWidth() - M * 2 - ctrlW - (int)(8 * s);
+        int gh = b.getHeight() - (int)(32 * s);
         if (stepSeqGrid != nullptr)
             stepSeqGrid->setBounds(gx, gy, gw, gh);
     }
 
     // ── Row 4: MASTER ─────────────────────────────────────────────────────────
     {
-        int r4y = HEADERH + GAP + ROW1H + GAP + ROW2H + GAP + SEQH + GAP;
+        const int r4y = HEADERH + GAP + ROW1H + GAP + ROW2H + GAP + SEQH + GAP;
         masterPanel.setBounds(GAP, r4y, W - GAP * 2, MASTERH - GAP);
         auto b = masterPanel.getBounds();
-        int  ix = b.getX() + 6;
-        int  iy = b.getY() + 28;
-        int  kw = (b.getWidth() - 12) / 3;
+        int  ix = b.getX() + M;
+        int  iy = b.getY() + HO;
+        int  kw = (b.getWidth() - M * 2) / 3;
         placeKnobAt(preampKnob, ix, iy, kw);
         placeKnobAt(fxMixKnob, ix + kw, iy, kw);
         placeKnobAt(outputVolumeKnob, ix + kw * 2, iy, kw);
