@@ -39,6 +39,15 @@ jobs:
             "$(cygpath -w "${{ env.JUCE_DIR }}/modules")"
           "$PROJUCER" --resave BitMorph.jucer
 
+      - name: Regenerate JuceLibraryCode
+        shell: bash
+        run: |
+          # Remove stale JuceLibraryCode so Projucer regenerates it with correct paths
+          rm -rf JuceLibraryCode
+          PROJUCER="${{ env.JUCE_DIR }}/Projucer.exe"
+          "$PROJUCER" --set-global-search-path windows defaultJuceModulePath             "$(cygpath -w "${{ env.JUCE_DIR }}/modules")"
+          "$PROJUCER" --resave BitMorph.jucer
+
       - name: Build VST3
         shell: cmd
         run: |
@@ -136,20 +145,11 @@ jobs:
           cp -R Presets/. "${STAGE}/Library/Application Support/BitMorph/Presets/"
 
           SCRIPTS="$(mktemp -d)"
-          python3 -c "
-          import os, stat
-          script = '''#!/bin/bash
-          SRC=\"/Library/Application Support/BitMorph/Presets\"
-          DEST=\"\${HOME}/Documents/JUCE Projects/BitMorph/Presets\"
-          if [ -d \"\$SRC\" ]; then
-            mkdir -p \"\$DEST\"
-            rsync -a --ignore-existing \"\$SRC/\" \"\$DEST/\" 2>/dev/null || cp -Rn \"\$SRC/.\" \"\$DEST/\"
-          fi
-          '''
-          path = os.environ['SCRIPTS'] + '/postinstall'
-          open(path, 'w').write(script)
-          os.chmod(path, os.stat(path).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
-          " || true
+          # Write postinstall as base64 to avoid YAML/heredoc escaping issues.
+          # Script detects the real logged-in user since postinstall runs as root.
+          echo 'IyEvYmluL2Jhc2gKQUNUVUFMX1VTRVI9JChzdGF0IC1mICclU3UnIC9kZXYvY29uc29sZSAyPi9kZXYvbnVsbCkKaWYgWyAteiAiJEFDVFVBTF9VU0VSIiBdIHx8IFsgIiRBQ1RVQUxfVVNFUiIgPSAicm9vdCIgXTsgdGhlbgogIEFDVFVBTF9VU0VSPSQoc2N1dGlsIDw8PCAnc2hvdyBTdGF0ZTovVXNlcnMvQ29uc29sZVVzZXInIHwgYXdrICcvTmFtZSA6LyB7IHByaW50ICQzIH0nKQpmaQpVU0VSX0hPTUU9JChkc2NsIC4gLXJlYWQgL1VzZXJzLyIkQUNUVUFMX1VTRVIiIE5GU0hvbWVEaXJlY3RvcnkgMj4vZGV2L251bGwgfCBhd2sgJ3twcmludCAkMn0nKQpbIC16ICIkVVNFUl9IT01FIiBdICYmIFVTRVJfSE9NRT0iL1VzZXJzLyRBQ1RVQUxfVVNFUiIKU1JDPSIvTGlicmFyeS9BcHBsaWNhdGlvbiBTdXBwb3J0L0JpdE1vcnBoL1ByZXNldHMiCkRFU1Q9IiRVU0VSX0hPTUUvRG9jdW1lbnRzL0pVQ0UgUHJvamVjdHMvQml0TW9ycGgvUHJlc2V0cyIKaWYgWyAtZCAiJFNSQyIgXTsgdGhlbgogIG1rZGlyIC1wICIkREVTVCIKICByc3luYyAtYSAtLWlnbm9yZS1leGlzdGluZyAiJFNSQy8iICIkREVTVC8iIDI+L2Rldi9udWxsIHx8IGNwIC1SbiAiJFNSQy8uIiAiJERFU1QvIgogIGNob3duIC1SICIkQUNUVUFMX1VTRVIiICIkREVTVCIKZmkK' \
+            | base64 --decode > "$SCRIPTS/postinstall"
+          chmod +x "$SCRIPTS/postinstall"
 
           PKGS="$(mktemp -d)"
           pkgbuild \
